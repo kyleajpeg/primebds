@@ -19,8 +19,8 @@ namespace primebds::handlers::connections {
         auto &modules = conf["modules"];
 
         // Join/leave messages
-        bool send_on_connect = modules.value("/join_leave_messages/send_on_connection"_json_pointer, true);
-        std::string join_msg = modules.value("/join_leave_messages/join_message"_json_pointer, std::string("{player} has joined"));
+        bool send_on_connect = modules.value("/connections/custom_join_message/enabled"_json_pointer, true);
+        std::string join_msg = modules.value("/connections/custom_join_message/message"_json_pointer, std::string("\u00a7a+ \u00a77{player}"));
         if (send_on_connect) {
             std::string formatted = join_msg;
             auto pos = formatted.find("{player}");
@@ -30,8 +30,8 @@ namespace primebds::handlers::connections {
         }
 
         // MOTD
-        bool motd_on_connect = modules.value("/message_of_the_day/send_message_of_the_day_on_connect"_json_pointer, false);
-        std::string motd = modules.value("/message_of_the_day/message_of_the_day_command"_json_pointer, std::string(""));
+        bool motd_on_connect = modules.value("/connections/motd/enabled"_json_pointer, false);
+        std::string motd = modules.value("/connections/motd/message"_json_pointer, std::string(""));
         if (motd_on_connect && !motd.empty()) {
             player.sendMessage(motd);
         }

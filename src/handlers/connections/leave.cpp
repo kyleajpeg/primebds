@@ -19,8 +19,8 @@ namespace primebds::handlers::connections {
         auto &modules = conf["modules"];
 
         // Leave message
-        bool send_on_connect = modules.value("/join_leave_messages/send_on_connection"_json_pointer, true);
-        std::string leave_msg = modules.value("/join_leave_messages/leave_message"_json_pointer, std::string("{player} has left"));
+        bool send_on_connect = modules.value("/connections/custom_leave_message/enabled"_json_pointer, true);
+        std::string leave_msg = modules.value("/connections/custom_leave_message/message"_json_pointer, std::string("\u00a7c- \u00a77{player}"));
         if (send_on_connect) {
             std::string formatted = leave_msg;
             auto pos = formatted.find("{player}");

@@ -89,7 +89,7 @@ namespace primebds::config {
         if (content.empty()) {
             config_ = {{"modules", getDefaultModules()}};
             std::cout << "[PrimeBDS] Config file not found, creating defaults at: " << config_path_ << "\n";
-            writeTextFile(config_path_, config_.dump(4));
+            writeTextFile(config_path_, config_.dump(4, ' ', false, nlohmann::json::error_handler_t::replace));
             return;
         }
 
@@ -118,7 +118,7 @@ namespace primebds::config {
 
     void ConfigManager::save() {
         std::lock_guard lock(mutex_);
-        writeTextFile(config_path_, config_.dump(4));
+        writeTextFile(config_path_, config_.dump(4, ' ', false, nlohmann::json::error_handler_t::replace));
     }
 
     void ConfigManager::reload() { {

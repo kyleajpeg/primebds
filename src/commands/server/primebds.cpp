@@ -129,8 +129,10 @@ namespace primebds::commands {
                 auto &val = section[key];
                 if (val.is_boolean())
                     form.toggle(formatLabel(key), val.get<bool>());
-                else
-                    form.textInput(formatLabel(key), val.dump(), val.dump());
+                else {
+                    std::string s = val.is_string() ? val.get<std::string>() : val.dump();
+                    form.textInput(formatLabel(key), s, s);
+                }
             }
 
             auto player_name = player.getName();
@@ -172,8 +174,10 @@ namespace primebds::commands {
                 auto &val = section[key];
                 if (val.is_boolean())
                     form.toggle(formatLabel(key), val.get<bool>());
-                else
-                    form.textInput(formatLabel(key), val.dump(), val.dump());
+                else {
+                    std::string s = val.is_string() ? val.get<std::string>() : val.dump();
+                    form.textInput(formatLabel(key), s, s);
+                }
             }
 
             auto player_name = player.getName();
