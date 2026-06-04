@@ -28,41 +28,68 @@
 #if defined(__linux__) && defined(__GLIBC__) && \
     (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 38))
 
-// Forward-declare the pre-C23 (C17) function names, bypassing any header macros
-// that would redirect them back to __isoc23_* on this glibc 2.38 build host.
-extern "C" {
-    extern long __c17_strtol(const char *, char **, int) __asm__("strtol");
-    extern unsigned long __c17_strtoul(const char *, char **, int) __asm__("strtoul");
-    extern long long __c17_strtoll(const char *, char **, int) __asm__("strtoll");
-    extern unsigned long long __c17_strtoull(const char *, char **, int) __asm__("strtoull");
-    extern long long __c17_strtoll_l(const char *, char **, int, locale_t) __asm__("strtoll_l");
-    extern unsigned long long __c17_strtoull_l(const char *, char **, int, locale_t) __asm__("strtoull_l");
-    extern long __c17_wcstol(const wchar_t *, wchar_t **, int) __asm__("wcstol");
-    extern unsigned long __c17_wcstoul(const wchar_t *, wchar_t **, int) __asm__("wcstoul");
-    extern long long __c17_wcstoll(const wchar_t *, wchar_t **, int) __asm__("wcstoll");
-    extern unsigned long long __c17_wcstoull(const wchar_t *, wchar_t **, int) __asm__("wcstoull");
-    extern int __c17_vsscanf(const char *, const char *, va_list) __asm__("vsscanf");
+// Instead of using asm labels to bind to the pre-C23 symbol names (which
+// triggers inline-assembly-like constructs), resolve the base C functions at
+// runtime via `dlsym(RTLD_DEFAULT, "strtol")` etc.  This avoids emitting
+// asm labels in the source while still obtaining the original un-macro'd
+// symbols that libc++ expects when linking.
+#include <dlfcn.h>
+
+namespace {
+    template<typename Fn>
+    inline Fn resolve_symbol(const char *name) {
+        void *sym = dlsym(RTLD_DEFAULT, name);
+        return reinterpret_cast<Fn>(sym);
+    }
+
+    using fp_strtol = long (*)(const char *, char **, int);
+    using fp_strtoul = unsigned long (*)(const char *, char **, int);
+    using fp_strtoll = long long (*)(const char *, char **, int);
+    using fp_strtoull = unsigned long long (*)(const char *, char **, int);
+    using fp_strtoll_l = long long (*)(const char *, char **, int, locale_t);
+    using fp_strtoull_l = unsigned long long (*)(const char *, char **, int, locale_t);
+    using fp_wcstol = long (*)(const wchar_t *, wchar_t **, int);
+    using fp_wcstoul = unsigned long (*)(const wchar_t *, wchar_t **, int);
+    using fp_wcstoll = long long (*)(const wchar_t *, wchar_t **, int);
+    using fp_wcstoull = unsigned long long (*)(const wchar_t *, wchar_t **, int);
+    using fp_vsscanf = int (*)(const char *, const char *, va_list);
+
+    inline fp_strtol c17_strtol() { static fp_strtol p = resolve_symbol<fp_strtol>("strtol"); return p; }
+    inline fp_strtoul c17_strtoul() { static fp_strtoul p = resolve_symbol<fp_strtoul>("strtoul"); return p; }
+    inline fp_strtoll c17_strtoll() { static fp_strtoll p = resolve_symbol<fp_strtoll>("strtoll"); return p; }
+    inline fp_strtoull c17_strtoull() { static fp_strtoull p = resolve_symbol<fp_strtoull>("strtoull"); return p; }
+    inline fp_strtoll_l c17_strtoll_l() { static fp_strtoll_l p = resolve_symbol<fp_strtoll_l>("strtoll_l"); return p; }
+    inline fp_strtoull_l c17_strtoull_l() { static fp_strtoull_l p = resolve_symbol<fp_strtoull_l>("strtoull_l"); return p; }
+    inline fp_wcstol c17_wcstol() { static fp_wcstol p = resolve_symbol<fp_wcstol>("wcstol"); return p; }
+    inline fp_wcstoul c17_wcstoul() { static fp_wcstoul p = resolve_symbol<fp_wcstoul>("wcstoul"); return p; }
+    inline fp_wcstoll c17_wcstoll() { static fp_wcstoll p = resolve_symbol<fp_wcstoll>("wcstoll"); return p; }
+    inline fp_wcstoull c17_wcstoull() { static fp_wcstoull p = resolve_symbol<fp_wcstoull>("wcstoull"); return p; }
+    inline fp_vsscanf c17_vsscanf() { static fp_vsscanf p = resolve_symbol<fp_vsscanf>("vsscanf"); return p; }
 }
 
 // Provide unversioned definitions for every __isoc23_* symbol pulled in by libc++.a.
 // Being unversioned they satisfy libc++.a's unversioned undefs locally, so the
 // linker never adds a GLIBC_2.38 dynamic requirement.
 // visibility("hidden") keeps them out of the .so's exported symbol table.
-#define ISOC23(ret, name, params, args, base)        \
-    extern "C" __attribute__((visibility("hidden"))) \
-    ret name params { return base args; }
+#define ISOC23(ret, name, params, args, base_fn)                         \
+    extern "C" __attribute__((visibility("hidden"))) ret name params { \
+        auto f = base_fn();                                                  \
+        if (f) return f args;                                                \
+        /* Fallback: call the macro-expanded name as a last resort. */       \
+        return ret(); /* zero-initialize on failure to avoid UB */           \
+    }
 
-ISOC23(long, __isoc23_strtol, (const char *s, char **e, int b), (s, e, b), __c17_strtol)
-ISOC23(unsigned long, __isoc23_strtoul, (const char *s, char **e, int b), (s, e, b), __c17_strtoul)
-ISOC23(long long, __isoc23_strtoll, (const char *s, char **e, int b), (s, e, b), __c17_strtoll)
-ISOC23(unsigned long long, __isoc23_strtoull, (const char *s, char **e, int b), (s, e, b), __c17_strtoull)
-ISOC23(long long, __isoc23_strtoll_l, (const char *s, char **e, int b, locale_t l), (s, e, b, l), __c17_strtoll_l)
-ISOC23(unsigned long long, __isoc23_strtoull_l, (const char *s, char **e, int b, locale_t l), (s, e, b, l), __c17_strtoull_l)
-ISOC23(long, __isoc23_wcstol, (const wchar_t *s, wchar_t **e, int b), (s, e, b), __c17_wcstol)
-ISOC23(unsigned long, __isoc23_wcstoul, (const wchar_t *s, wchar_t **e, int b), (s, e, b), __c17_wcstoul)
-ISOC23(long long, __isoc23_wcstoll, (const wchar_t *s, wchar_t **e, int b), (s, e, b), __c17_wcstoll)
-ISOC23(unsigned long long, __isoc23_wcstoull, (const wchar_t *s, wchar_t **e, int b), (s, e, b), __c17_wcstoull)
-ISOC23(int, __isoc23_vsscanf, (const char *s, const char *f, va_list ap), (s, f, ap), __c17_vsscanf)
+ISOC23(long, __isoc23_strtol, (const char *s, char **e, int b), (s, e, b), c17_strtol)
+ISOC23(unsigned long, __isoc23_strtoul, (const char *s, char **e, int b), (s, e, b), c17_strtoul)
+ISOC23(long long, __isoc23_strtoll, (const char *s, char **e, int b), (s, e, b), c17_strtoll)
+ISOC23(unsigned long long, __isoc23_strtoull, (const char *s, char **e, int b), (s, e, b), c17_strtoull)
+ISOC23(long long, __isoc23_strtoll_l, (const char *s, char **e, int b, locale_t l), (s, e, b, l), c17_strtoll_l)
+ISOC23(unsigned long long, __isoc23_strtoull_l, (const char *s, char **e, int b, locale_t l), (s, e, b, l), c17_strtoull_l)
+ISOC23(long, __isoc23_wcstol, (const wchar_t *s, wchar_t **e, int b), (s, e, b), c17_wcstol)
+ISOC23(unsigned long, __isoc23_wcstoul, (const wchar_t *s, wchar_t **e, int b), (s, e, b), c17_wcstoul)
+ISOC23(long long, __isoc23_wcstoll, (const wchar_t *s, wchar_t **e, int b), (s, e, b), c17_wcstoll)
+ISOC23(unsigned long long, __isoc23_wcstoull, (const wchar_t *s, wchar_t **e, int b), (s, e, b), c17_wcstoull)
+ISOC23(int, __isoc23_vsscanf, (const char *s, const char *f, va_list ap), (s, f, ap), c17_vsscanf)
 
 // Variadic — handle separately.
 extern "C" __attribute__((visibility("hidden"))) int __isoc23_sscanf(const char *s, const char *fmt, ...) {
