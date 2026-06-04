@@ -19,9 +19,9 @@ namespace primebds::commands {
                          "/rank (create)<sub: rank_sub> <name: string>",
                          "/rank (delete)<sub: rank_sub> <name: string>",
                          "/rank (info)<sub: rank_sub> <name: string>",
-                         "/rank (perm)<sub: rank_sub> <action: string> <rank: string> <permission: string> [state: bool]",
+                         "/rank (perm)<sub: rank_sub> (add|remove)<perm_action: perm_action> <rank: string> <permission: string> [state: bool]",
                          "/rank (list)<sub: rank_sub> [page: int]",
-                         "/rank (inherit)<sub: rank_sub> <action: string> <rank: string> <parent: string>",
+                         "/rank (inherit)<sub: rank_sub> (add|remove)<rank_action: rank_action> <rank: string> <parent: string>",
                          "/rank (weight)<sub: rank_sub> <rank: string> <weight: int>",
                          "/rank (prefix)<sub: rank_sub> <rank: string> <prefix: message>",
                          "/rank (suffix)<sub: rank_sub> <rank: string> <suffix: message>"};
@@ -194,32 +194,70 @@ namespace primebds::commands {
             return true;
         }
 
-        if (sub == "inherit" && args.size() >= 3) {
+        if (sub == "inherit") {
+            // Usage: /rank inherit <add|remove> <rank> <parent>
+            if (args.size() < 4) {
+                sender.sendMessage("\u00a7cUsage: /rank inherit <add|remove> <rank> <parent>");
+                return false;
+            }
+            std::string action = toLower(args[1]);
             auto perms = cfg.loadPermissions();
-            auto key = findRankKey(perms, args[1]);
-            auto parent_key = findRankKey(perms, args[2]);
+            auto key = findRankKey(perms, args[2]);
+            auto parent_key = findRankKey(perms, args[3]);
             if (key.empty()) {
-                sender.sendMessage("\u00a7cRank \u00a7e" + args[1] + " \u00a7cdoes not exist");
+                sender.sendMessage("\u00a7cRank \u00a7e" + args[2] + " \u00a7cdoes not exist");
                 return false;
             }
             if (parent_key.empty()) {
-                sender.sendMessage("\u00a7cParent rank \u00a7e" + args[2] + " \u00a7cdoes not exist");
+                sender.sendMessage("\u00a7cParent rank \u00a7e" + args[3] + " \u00a7cdoes not exist");
                 return false;
             }
             if (!perms[key].contains("inherits") || !perms[key]["inherits"].is_array())
                 perms[key]["inherits"] = nlohmann::json::array();
-            // Add if not already present
-            bool found = false;
-            for (auto &p : perms[key]["inherits"]) {
-                if (toLower(p.get<std::string>()) == toLower(parent_key)) {
-                    found = true;
-                    break;
+
+            if (action == "add") {
+                bool found = false;
+                for (auto &p : perms[key]["inherits"]) {
+                    if (toLower(p.get<std::string>()) == toLower(parent_key)) {
+                        found = true;
+                        break;
+                    }
                 }
-            }
-            if (!found)
+                if (found) {
+                    sender.sendMessage("\u00a7eRank \u00a7e" + key + " \u00a7ealready inherits from \u00a7e" + parent_key);
+                    return true;
+                }
                 perms[key]["inherits"].push_back(parent_key);
-            cfg.savePermissions(perms);
-            sender.sendMessage("\u00a7aRank \u00a7e" + key + " \u00a7anow inherits from \u00a7e" + parent_key);
+                cfg.savePermissions(perms);
+                pm.reloadPermissionsJson();
+                pm.clearAllPermCaches();
+                for (auto *p : plugin.getServer().getOnlinePlayers())
+                    plugin.reloadCustomPerms(*p);
+                sender.sendMessage("\u00a7aRank \u00a7e" + key + " \u00a7anow inherits from \u00a7e" + parent_key);
+            } else if (action == "remove") {
+                nlohmann::json new_inherits = nlohmann::json::array();
+                bool removed = false;
+                for (auto &p : perms[key]["inherits"]) {
+                    if (toLower(p.get<std::string>()) != toLower(parent_key))
+                        new_inherits.push_back(p);
+                    else
+                        removed = true;
+                }
+                if (!removed) {
+                    sender.sendMessage("\u00a7cRank \u00a7e" + key + " \u00a7cdoes not inherit from \u00a7e" + parent_key);
+                    return true;
+                }
+                perms[key]["inherits"] = new_inherits;
+                cfg.savePermissions(perms);
+                pm.reloadPermissionsJson();
+                pm.clearAllPermCaches();
+                for (auto *p : plugin.getServer().getOnlinePlayers())
+                    plugin.reloadCustomPerms(*p);
+                sender.sendMessage("\u00a7aRank \u00a7e" + key + " \u00a7ano longer inherits from \u00a7e" + parent_key);
+            } else {
+                sender.sendMessage("\u00a7cInvalid action '" + args[1] + "': use add or remove");
+                return false;
+            }
             return true;
         }
 
