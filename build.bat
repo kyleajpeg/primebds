@@ -2,7 +2,9 @@
 setlocal enabledelayedexpansion
 
 :: PrimeBDS Build Script for Windows
-:: Requires: CMake 3.15+, C++20 compiler (Clang, MSVC, or MinGW)
+:: Requires: CMake 3.15+, clang-cl (LLVM/Clang with MSVC frontend)
+::   Install via: winget install LLVM.LLVM
+::   Or install the "C++ Clang tools for Windows" workload in Visual Studio
 
 set "BUILD_DIR=build\windows"
 set "BUILD_TYPE=Release"
@@ -41,8 +43,9 @@ if errorlevel 1 (
 set "COMPILER_FOUND="
 set "VCVARS_FOUND="
 
-:: 1) Try to set up MSVC environment via vcvarsall.bat
-::    Check VS 2026 (v18), 2022, 2019, 2017 across editions
+:: 1) Try to set up MSVC sysroot via vcvarsall.bat — required by clang-cl even
+::    when clang-cl itself comes from a standalone LLVM install.
+::    Also add VS-bundled LLVM (VC\Tools\Llvm\x64\bin) to PATH while here.
 for %%V in (18 2022 2019 2017) do (
     for %%E in (Community Professional Enterprise BuildTools) do (
         if not defined VCVARS_FOUND (
@@ -57,47 +60,51 @@ for %%V in (18 2022 2019 2017) do (
                 set "VCVARS_FOUND=1"
             )
         )
+        :: Add VS-bundled LLVM to PATH so clang-cl can be found below
+        if exist "C:\Program Files\Microsoft Visual Studio\%%V\%%E\VC\Tools\Llvm\x64\bin\clang-cl.exe" (
+            if not defined VSLLVM_ADDED (
+                set "PATH=C:\Program Files\Microsoft Visual Studio\%%V\%%E\VC\Tools\Llvm\x64\bin;!PATH!"
+                set "VSLLVM_ADDED=1"
+            )
+        )
+        if exist "C:\Program Files (x86)\Microsoft Visual Studio\%%V\%%E\VC\Tools\Llvm\x64\bin\clang-cl.exe" (
+            if not defined VSLLVM_ADDED (
+                set "PATH=C:\Program Files (x86)\Microsoft Visual Studio\%%V\%%E\VC\Tools\Llvm\x64\bin;!PATH!"
+                set "VSLLVM_ADDED=1"
+            )
+        )
     )
 )
 
-:: 2) Check if cl.exe is now on PATH (MSVC native compiler)
-where cl >nul 2>&1
-if not errorlevel 1 (
-    set "COMPILER_FOUND=MSVC"
-    goto :compiler_done
+:: 2) Add standalone LLVM install to PATH if clang-cl not yet visible
+where clang-cl >nul 2>&1
+if errorlevel 1 (
+    if exist "C:\Program Files\LLVM\bin\clang-cl.exe" (
+        set "PATH=C:\Program Files\LLVM\bin;!PATH!"
+    )
 )
 
-:: 3) Check for Clang (works with MSVC libs set up above)
-where clang++ >nul 2>&1
+:: 3) Confirm clang-cl is available — it is the only supported compiler on Windows
+where clang-cl >nul 2>&1
 if not errorlevel 1 (
-    set "COMPILER_FOUND=Clang"
-    set "COMPILER_FLAGS=-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++"
-    goto :compiler_done
-)
-if exist "C:\Program Files\LLVM\bin\clang++.exe" (
-    set "PATH=C:\Program Files\LLVM\bin;%PATH%"
-    set "COMPILER_FOUND=Clang"
-    set "COMPILER_FLAGS=-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++"
-    goto :compiler_done
-)
-
-:: 4) Check for MinGW g++
-where g++ >nul 2>&1
-if not errorlevel 1 (
-    set "COMPILER_FOUND=MinGW"
+    set "COMPILER_FOUND=clang-cl"
+    set "COMPILER_FLAGS=-DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl"
     goto :compiler_done
 )
 
 :compiler_done
 if not defined COMPILER_FOUND (
-    echo [ERROR] No C++ compiler found. Install one of:
-    echo   - Visual Studio with "Desktop development with C++" workload
-    echo   - LLVM/Clang: winget install LLVM.LLVM
-    echo   - MinGW-w64
+    echo [ERROR] clang-cl not found. Endstone requires clang-cl on Windows.
+    echo.
+    echo Install one of:
+    echo   A) Standalone LLVM:  winget install LLVM.LLVM
+    echo   B) Visual Studio workload: "C++ Clang tools for Windows"
+    echo.
+    echo Then re-run this script.
     exit /b 1
 )
 echo Compiler: %COMPILER_FOUND%
-if defined VCVARS_FOUND echo MSVC environment: loaded
+if defined VCVARS_FOUND echo MSVC sysroot: loaded (required by clang-cl)
 
 :: Pick generator - prefer Ninja if available, fall back to NMake
 set "GENERATOR=NMake Makefiles"
