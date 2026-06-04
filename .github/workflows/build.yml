@@ -82,8 +82,16 @@ jobs:
       - name: Set up CMake and Ninja
         uses: lukka/get-cmake@latest
 
-      - name: Configure
-        run: cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Install LLVM (clang-cl)
+        run: |
+          choco install llvm -y --no-progress
+          refreshenv || true
+
+      - name: Configure (use clang-cl)
+        env:
+          CC: clang-cl
+          CXX: clang-cl
+        run: cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
 
       - name: Build
         run: cmake --build build/windows
