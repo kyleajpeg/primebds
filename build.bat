@@ -97,8 +97,8 @@ if not defined COMPILER_FOUND (
     echo [ERROR] clang-cl not found. Endstone requires clang-cl on Windows.
     echo.
     echo Install one of:
-    echo   A) Standalone LLVM:  winget install LLVM.LLVM
-    echo   B) Visual Studio workload: "C++ Clang tools for Windows"
+    echo   A^) Standalone LLVM:  winget install LLVM.LLVM
+    echo   B^) Visual Studio workload: "C++ Clang tools for Windows"
     echo.
     echo Then re-run this script.
     exit /b 1
