@@ -25,7 +25,7 @@ namespace primebds::config {
     nlohmann::json getDefaultPermissions() {
         return {
             {"Default", {{"permissions", {{"endstone.broadcast", true}, {"endstone.broadcast.user", true}, {"endstone.command.version", true}, {"endstone.command.plugins", true}, {"primebds.command.ping", true}, {"primebds.command.reply", true}, {"minecraft.command.list", true}, {"minecraft.command.tell", true}, {"minecraft.command.me", true}}}, {"inherits", nlohmann::json::array()}, {"weight", 0}}},
-            {"Operator", {{"permissions", {{"*", true}}}, {"inherits", {"Default"}}, {"weight", 100}, {"prefix", "\u00a78[\u00a7cAdmin\u00a78] \u00a7c"}, {"suffix", "\u00a7r"}}}};
+            {"Operator", {{"permissions", {{"*", true}, {"primebds.minecraft.op", true}}}, {"inherits", {"Default"}}, {"weight", 100}, {"prefix", "\u00a78[\u00a7cAdmin\u00a78] \u00a7c"}, {"suffix", "\u00a7r"}}}};
     }
 
     std::vector<std::string> getDefaultRules() {

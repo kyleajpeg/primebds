@@ -237,15 +237,18 @@ namespace primebds {
                 attachment->setPermission(perm, value);
         }
 
-        // Auto op/deop based on rank
-        auto rank_lower = internal_rank;
-        std::transform(rank_lower.begin(), rank_lower.end(), rank_lower.begin(), ::tolower);
-        if (rank_lower == "operator" && !player.isOp() && player.isValid()) {
-            (void)getServer().dispatchCommand(getServer().getCommandSender(),
-                                              "op \"" + user->name + "\"");
-        } else if (rank_lower != "operator" && player.isOp() && player.isValid()) {
-            (void)getServer().dispatchCommand(getServer().getCommandSender(),
-                                              "deop \"" + user->name + "\"");
+        // Auto op/deop based on the primebds.minecraft.op permission node.
+        // Any rank whose resolved permissions include that node (including via
+        // wildcard or inheritance) will receive server-operator status.
+        {
+            auto op_it = final_permissions.find("primebds.minecraft.op");
+            bool wants_op = op_it != final_permissions.end() && op_it->second;
+            if (wants_op && !player.isOp() && player.isValid())
+                (void)getServer().dispatchCommand(getServer().getCommandSender(),
+                                                  "op \"" + user->name + "\"");
+            else if (!wants_op && player.isOp() && player.isValid())
+                (void)getServer().dispatchCommand(getServer().getCommandSender(),
+                                                  "deop \"" + user->name + "\"");
         }
 
         player.updateCommands();

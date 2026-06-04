@@ -463,10 +463,14 @@ namespace primebds::db {
             if (!j.is_object())
                 return perms;
             for (auto &[k, v] : j.items()) {
+                // Normalize permission keys to lowercase to ensure consistent
+                // matching across rank/user layers.
+                std::string key = k;
+                std::transform(key.begin(), key.end(), key.begin(), ::tolower);
                 if (v.is_boolean())
-                    perms[k] = v.get<bool>();
+                    perms[key] = v.get<bool>();
                 else if (v.is_number())
-                    perms[k] = v.get<int>() != 0;
+                    perms[key] = v.get<int>() != 0;
             }
         } catch (...) {
         }
@@ -484,7 +488,10 @@ namespace primebds::db {
             } catch (...) {
             }
         }
-        j[perm] = value;
+        // Store permission keys lowercase to avoid mismatches during lookup/inheritance
+        std::string key = perm;
+        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        j[key] = value;
         updateUser(xuid, "perms", j.dump());
     }
 
@@ -496,7 +503,9 @@ namespace primebds::db {
             auto j = nlohmann::json::parse(user->perms);
             if (!j.is_object())
                 return;
-            j.erase(perm);
+            std::string key = perm;
+            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+            j.erase(key);
             updateUser(xuid, "perms", j.dump());
         } catch (...) {
         }

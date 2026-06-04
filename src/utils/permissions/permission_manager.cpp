@@ -50,6 +50,7 @@ namespace primebds::permissions {
         "minecraft.command.testforblock", "minecraft.command.testforblocks"};
 
     static const std::vector<std::string> EXTRA_PERMS = {
+        "primebds.minecraft.op",
         "primebds.exempt.msgtoggle", "primebds.exempt.globalmute",
         "primebds.exempt.mute", "primebds.exempt.ban",
         "primebds.exempt.kick", "primebds.exempt.warn",
@@ -246,11 +247,21 @@ namespace primebds::permissions {
                 return it->second;
         }
 
+        // Do a case-insensitive lookup for the actual rank key stored in PERMISSIONS
         std::string prefix;
-        if (PERMISSIONS.contains(rank) && PERMISSIONS[rank].contains("prefix"))
-            prefix = PERMISSIONS[rank]["prefix"].get<std::string>();
+        std::string actual_key;
+        auto rank_lower = toLower(rank);
+        for (auto &[k, v] : PERMISSIONS.items()) {
+            if (toLower(k) == rank_lower) {
+                actual_key = k;
+                break;
+            }
+        }
+        if (!actual_key.empty() && PERMISSIONS[actual_key].contains("prefix"))
+            prefix = PERMISSIONS[actual_key]["prefix"].get<std::string>();
 
         std::lock_guard lock(mutex_);
+        // Cache under the requested rank string so subsequent calls are fast
         prefix_cache_[rank] = prefix;
         return prefix;
     }
@@ -262,9 +273,18 @@ namespace primebds::permissions {
                 return it->second;
         }
 
+        // Case-insensitive lookup for suffix similar to prefix handling
         std::string suffix;
-        if (PERMISSIONS.contains(rank) && PERMISSIONS[rank].contains("suffix"))
-            suffix = PERMISSIONS[rank]["suffix"].get<std::string>();
+        std::string actual_key;
+        auto rank_lower = toLower(rank);
+        for (auto &[k, v] : PERMISSIONS.items()) {
+            if (toLower(k) == rank_lower) {
+                actual_key = k;
+                break;
+            }
+        }
+        if (!actual_key.empty() && PERMISSIONS[actual_key].contains("suffix"))
+            suffix = PERMISSIONS[actual_key]["suffix"].get<std::string>();
 
         std::lock_guard lock(mutex_);
         suffix_cache_[rank] = suffix;
