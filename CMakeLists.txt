@@ -56,6 +56,13 @@ file(GLOB_RECURSE PLUGIN_SOURCES
     src/*.cpp
 )
 
+# Exclude Linux-specific glibc compatibility shim on non-Linux hosts.
+# This file contains asm label declarations intended only for Linux/glibc
+# build hosts and can trigger security scanners on other platforms.
+if(NOT (UNIX AND CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+    list(REMOVE_ITEM PLUGIN_SOURCES ${CMAKE_SOURCE_DIR}/src/glibc_compat.cpp)
+endif()
+
 endstone_add_plugin(${PROJECT_NAME} ${PLUGIN_SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE

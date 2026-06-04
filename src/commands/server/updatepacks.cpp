@@ -53,6 +53,14 @@ namespace primebds::commands {
                 continue;
 
             try {
+                // Ensure manifest_path is inside the expected pack directory to avoid
+                // accidental or malicious path traversal when iterating filesystem entries.
+                std::error_code ec;
+                auto canonical_base = std::filesystem::weakly_canonical(base_path, ec);
+                auto canonical_manifest = std::filesystem::weakly_canonical(manifest_path, ec);
+                if (ec || canonical_manifest.string().rfind(canonical_base.string(), 0) != 0)
+                    continue;
+
                 std::ifstream ifs(manifest_path);
                 nlohmann::json manifest;
                 ifs >> manifest;
