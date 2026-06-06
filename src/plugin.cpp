@@ -16,10 +16,6 @@
 
 namespace primebds {
 
-    // ---------------------------------------------------------------------------
-    // Plugin lifecycle
-    // ---------------------------------------------------------------------------
-
     void PrimeBDS::onLoad() {
         getLogger().info("PrimeBDS v{} loading...", getDescription().getVersion());
 
@@ -122,10 +118,6 @@ namespace primebds {
         return false;
     }
 
-    // ---------------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------------
-
     void PrimeBDS::reloadCustomPerms(endstone::Player &player) {
         auto &pm = permissions::PermissionManager::instance();
         auto user = db->getOnlineUser(player.getXuid());
@@ -186,11 +178,6 @@ namespace primebds {
             }
         }
 
-        // Remove any existing primebdsoverride attachment.
-        // Collect attachments first; calling remove() while iterating
-        // invalidates the PermissionAttachmentInfo pointers held by other
-        // entries in the set, which previously surfaced as std::bad_alloc.
-        {
             std::set<endstone::PermissionAttachment *> to_remove;
             for (auto *info : player.getEffectivePermissions()) {
                 if (!info)
@@ -237,10 +224,6 @@ namespace primebds {
                 attachment->setPermission(perm, value);
         }
 
-        // Auto op/deop based on the primebds.minecraft.op permission node.
-        // Any rank whose resolved permissions include that node (including via
-        // wildcard or inheritance) will receive server-operator status.
-        {
             auto op_it = final_permissions.find("primebds.minecraft.op");
             bool wants_op = op_it != final_permissions.end() && op_it->second;
             if (wants_op && !player.isOp() && player.isValid())
@@ -258,16 +241,11 @@ namespace primebds {
     }
 
     void PrimeBDS::checkForInactiveSessions() {
-        // End any sessions that are still open (from unclean shutdown)
         auto active = sldb->getActiveSessions();
         for (auto &session : active) {
             sldb->endSession(session["xuid"]);
         }
     }
-
-    // ---------------------------------------------------------------------------
-    // EventListener delegation
-    // ---------------------------------------------------------------------------
 
     void EventListener::onPlayerDeath(endstone::PlayerDeathEvent &event) {
         handlers::handleDeathEvent(plugin_, event);
