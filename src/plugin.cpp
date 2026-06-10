@@ -178,6 +178,7 @@ namespace primebds {
             }
         }
 
+        {
             std::set<endstone::PermissionAttachment *> to_remove;
             for (auto *info : player.getEffectivePermissions()) {
                 if (!info)
@@ -224,6 +225,7 @@ namespace primebds {
                 attachment->setPermission(perm, value);
         }
 
+        {
             auto op_it = final_permissions.find("primebds.minecraft.op");
             bool wants_op = op_it != final_permissions.end() && op_it->second;
             if (wants_op && !player.isOp() && player.isValid())
