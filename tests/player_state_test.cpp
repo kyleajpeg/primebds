@@ -73,6 +73,8 @@ int main() {
               !utils::mayKeepGameMode(3,has), "Unpermitted gameplay modes reset");
         permissions["primebds.command.gmc"]=true;
         check(utils::mayKeepGameMode(1,has) && !utils::mayKeepGameMode(3,has), "Creative capability does not grant spectator");
+        permissions["primebds.command.spectate"]=true;
+        check(utils::mayKeepGameMode(3,has), "Spectate capability preserves spectator mode");
         permissions["minecraft.command.gamemode"]=true;
         check(utils::mayKeepGameMode(1,has) && utils::mayKeepGameMode(3,has), "Native gamemode grant preserves modes");
         std::filesystem::remove_all(directory);

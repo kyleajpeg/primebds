@@ -149,7 +149,7 @@ namespace primebds {
                 return player.hasPermission(node);
             })) player.setGameMode(endstone::GameMode::Survival);
         const auto current_mode = player.getGameMode();
-        if (!has("fly") && !has("fly.other") && current_mode != endstone::GameMode::Creative &&
+        if (!has("fly") && current_mode != endstone::GameMode::Creative &&
             current_mode != endstone::GameMode::Spectator) player.setAllowFlight(false);
         if (!has("speed")) { player.setWalkSpeed(0.1f); player.setFlySpeed(0.05f); }
         if (!has("nickname") && !has("nickname.other")) player.setNameTag(player.getName());
