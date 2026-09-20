@@ -46,6 +46,16 @@ namespace primebds::commands {
     /// Manage server ranks!
     static bool cmd_rank(PrimeBDS &plugin, endstone::CommandSender &sender,
                          const std::vector<std::string> &args) {
+        // This handler changes persistent authority. Check locally as well as
+        // at normal command dispatch, so internal callers cannot skip the gate.
+        if (!sender.hasPermission("primebds.command.rank")) {
+            sender.sendMessage("You do not have permission to manage ranks.");
+            return false;
+        }
+        if (!config::ConfigManager::instance().isCommandEnabled("rank")) {
+            sender.sendMessage("The rank command is disabled.");
+            return false;
+        }
         if (args.empty()) {
             sender.sendMessage("\u00a7cUsage: /rank <set|create|delete|info|perm|list|inherit|weight|prefix|suffix> ...");
             return false;

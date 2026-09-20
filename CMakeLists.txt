@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(primebds VERSION 3.4.1 LANGUAGES C CXX)
+project(primebds VERSION 3.4.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -74,6 +74,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     nlohmann_json::nlohmann_json
     sqlite3
 )
+
+option(PRIMEBDS_BUILD_TESTS "Build permission regression tests" ON)
+if(PRIMEBDS_BUILD_TESTS)
+    enable_testing()
+    add_executable(command_authorization_test tests/command_authorization_test.cpp)
+    target_include_directories(command_authorization_test PRIVATE include)
+    add_test(NAME command_authorization COMMAND command_authorization_test)
+endif()
 
 # Copy plugin binary to output/ folder after build
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

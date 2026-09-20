@@ -105,6 +105,9 @@ namespace primebds {
     bool PrimeBDS::onCommand(endstone::CommandSender &sender,
                              const endstone::Command &command,
                              const std::vector<std::string> &args) {
+        // Defense in depth for callers reaching the executor directly.
+        if (!command.testPermission(sender))
+            return true;
         auto &registry = CommandRegistry::instance();
         auto *reg = registry.find(command.getName());
         if (reg) {
@@ -331,7 +334,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.1", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.1", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

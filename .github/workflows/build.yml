@@ -1,103 +1,73 @@
-name: Build
+name: ChromeVale Linux build
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: [chromevale-permissions-fix]
   pull_request:
-    branches: [ "main" ]
 
 permissions:
-  actions: write
   contents: read
 
 jobs:
-  cleanup:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Delete previous workflow runs
-        uses: Mattraks/delete-workflow-runs@v2
-        with:
-          token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 0
-          delete_workflow_pattern: build.yml
-
   build-linux:
-    needs: cleanup
     runs-on: ubuntu-latest
-    container:
-      image: ubuntu:22.04
+    container: ubuntu:22.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Install build tools
+      - name: Install Linux build tools
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          apt-get update -y -q
-          apt-get install -y -q git lsb-release wget software-properties-common gnupg cmake ninja-build
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          ./llvm.sh 18
-          apt-get install -y -q libc++-18-dev libc++abi-18-dev
-          rm -f llvm.sh
+          set -euo pipefail
+          apt-get update -q
+          apt-get install -y -q ca-certificates wget gnupg git cmake ninja-build binutils python3
+          wget -qO /usr/share/keyrings/llvm.asc https://apt.llvm.org/llvm-snapshot.gpg.key
+          printf '%s\n' 'deb [signed-by=/usr/share/keyrings/llvm.asc] https://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main' > /etc/apt/sources.list.d/llvm.list
+          apt-get update -q
+          apt-get install -y -q clang-18 libc++-18-dev libc++abi-18-dev
 
-      - name: Checkout Code
-        uses: actions/checkout@v6
+      - name: Checkout patched source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Configure
         env:
           CC: clang-18
           CXX: clang++-18
-        run: cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        run: cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DPRIMEBDS_BUILD_TESTS=ON
 
-      - name: Build
-        run: cmake --build build/linux --parallel $(nproc)
+      - name: Build plugin and regression tests
+        run: cmake --build build/linux --parallel 2
 
-      - name: Verify GLIBC compatibility
+      - name: Run regression tests
+        run: ctest --test-dir build/linux --output-on-failure
+
+      - name: Verify Linux compatibility and package provenance
         run: |
-          MAX_GLIBC=$(objdump -T build/linux/output/*.so | grep -oP 'GLIBC_\K[0-9.]+' | sort -V -u | tail -1)
-          echo "Max GLIBC requirement: GLIBC_${MAX_GLIBC}"
-          if [ "$(printf '%s\n' '2.35' "$MAX_GLIBC" | sort -V | tail -1)" != '2.35' ]; then
-            echo "::error::Binary requires GLIBC_${MAX_GLIBC} (> 2.35). Will fail on older hosting environments."
+          set -euo pipefail
+          binary=build/linux/output/endstone_primebds.so
+          test -s "$binary"
+          readelf -h "$binary"
+          objdump -T "$binary" > build/linux/symbols.txt
+          max_glibc=$(grep -oP 'GLIBC_\K[0-9.]+' build/linux/symbols.txt | sort -Vu | tail -1)
+          test -n "$max_glibc"
+          if [ "$(printf '%s\n' '2.35' "$max_glibc" | sort -V | tail -1)" != '2.35' ]; then
+            echo "::error::Requires GLIBC_$max_glibc; host compatibility limit is 2.35."
             exit 1
           fi
+          cd build/linux/output
+          sha256sum endstone_primebds.so > SHA256SUMS
+          printf 'PrimeBDS ChromeVale permission fix\nSource commit: %s\nBuild run: %s/%s/actions/runs/%s\nMaximum GLIBC: %s\n' "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$max_glibc" > BUILD-INFO.txt
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v7
+      - name: Upload verified build
+        uses: actions/upload-artifact@v4
         with:
-          name: primebds-linux
+          name: primebds-chromevale-linux-${{ github.sha }}
           path: build/linux/output/
-
-  build-windows:
-    runs-on: windows-2022
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x86_64
-
-      - name: Set up CMake and Ninja
-        uses: lukka/get-cmake@latest
-
-      - name: Install LLVM (clang-cl)
-        run: |
-          choco install llvm -y --no-progress
-          refreshenv || true
-
-      - name: Configure (use clang-cl)
-        env:
-          CC: clang-cl
-          CXX: clang-cl
-        run: cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
-
-      - name: Build
-        run: cmake --build build/windows
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: primebds-windows
-          path: build/windows/output/
+          if-no-files-found: error
+          retention-days: 30

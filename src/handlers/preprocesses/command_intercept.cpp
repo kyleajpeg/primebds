@@ -2,6 +2,7 @@
 /// Command preprocessing: moderation command remapping, exemption checks.
 
 #include "primebds/handlers/preprocesses/command_intercept.h"
+#include "primebds/handlers/preprocesses/command_authorization.h"
 #include "primebds/handlers/preprocesses/crasher_patch.h"
 #include "primebds/handlers/preprocesses/whisper.h"
 #include "primebds/plugin.h"
@@ -69,6 +70,8 @@ namespace primebds::handlers::preprocesses {
     }
 
     void handleCommandPreprocess(PrimeBDS &plugin, endstone::PlayerCommandEvent &event) {
+        if (event.isCancelled())
+            return;
         initParseCommands();
 
         auto &player = event.getPlayer();
@@ -92,6 +95,16 @@ namespace primebds::handlers::preprocesses {
 
         if (PARSE_COMMANDS.find(cmd) == PARSE_COMMANDS.end())
             return;
+
+        // The command event precedes Endstone's usual permission checks.
+        // Do not remap, kick, grant op or dispatch as console before this gate.
+        if (!canInterceptPlayerCommand(cmd, [&player](std::string_view permission) {
+                return player.hasPermission(std::string(permission));
+            })) {
+            player.sendMessage("You do not have permission to use this command.");
+            event.setCancelled(true);
+            return;
+        }
 
         bool mc_enabled = modules.value("/permissions_manager/minecraft"_json_pointer, true);
         bool es_enabled = modules.value("/permissions_manager/endstone"_json_pointer, true);
@@ -239,29 +252,17 @@ namespace primebds::handlers::preprocesses {
 
         // Op → rank set operator + BDS op
         if (cmd == "op" && args.size() > 1) {
-            auto *reg = CommandRegistry::instance().find("rank");
-            if (reg) {
-                std::vector<std::string> rank_args = {"set", args[1], "operator"};
-                reg->handler(plugin, player, rank_args);
-            }
-            auto *target = plugin.getServer().getPlayer(args[1]);
-            if (target)
-                target->setOp(true);
             event.setCancelled(true);
+            // Use normal command dispatch, including rank permission and the
+            // commands.json enable switch. Rank application synchronizes op.
+            (void)plugin.getServer().dispatchCommand(player, "rank set \"" + args[1] + "\" Operator");
             return;
         }
 
         // Deop → rank set default + BDS deop
         if (cmd == "deop" && args.size() > 1) {
-            auto *reg = CommandRegistry::instance().find("rank");
-            if (reg) {
-                std::vector<std::string> rank_args = {"set", args[1], "default"};
-                reg->handler(plugin, player, rank_args);
-            }
-            auto *target = plugin.getServer().getPlayer(args[1]);
-            if (target)
-                target->setOp(false);
             event.setCancelled(true);
+            (void)plugin.getServer().dispatchCommand(player, "rank set \"" + args[1] + "\" Default");
             return;
         }
 
@@ -350,6 +351,8 @@ namespace primebds::handlers::preprocesses {
     }
 
     void handleServerCommandPreprocess(PrimeBDS &plugin, endstone::ServerCommandEvent &event) {
+        if (event.isCancelled())
+            return;
         initParseCommands();
 
         std::string command = event.getCommand();
@@ -387,27 +390,13 @@ namespace primebds::handlers::preprocesses {
             return;
         }
         if (cmd == "op" && args.size() > 1) {
-            auto *reg = CommandRegistry::instance().find("rank");
-            if (reg) {
-                std::vector<std::string> rank_args = {"set", args[1], "operator"};
-                reg->handler(plugin, sender, rank_args);
-            }
-            auto *target = server.getPlayer(args[1]);
-            if (target)
-                target->setOp(true);
             event.setCancelled(true);
+            (void)server.dispatchCommand(sender, "rank set \"" + args[1] + "\" Operator");
             return;
         }
         if (cmd == "deop" && args.size() > 1) {
-            auto *reg = CommandRegistry::instance().find("rank");
-            if (reg) {
-                std::vector<std::string> rank_args = {"set", args[1], "default"};
-                reg->handler(plugin, sender, rank_args);
-            }
-            auto *target = server.getPlayer(args[1]);
-            if (target)
-                target->setOp(false);
             event.setCancelled(true);
+            (void)server.dispatchCommand(sender, "rank set \"" + args[1] + "\" Default");
             return;
         }
 

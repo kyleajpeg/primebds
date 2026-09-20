@@ -1,0 +1,76 @@
+# ChromeVale permission fix
+
+Based on upstream PrimeBDS v3.4.3, commit 4979fe2ae044828c834433655c83f2c1b177fb11.
+The plugin identifies itself as **3.4.3-chromevale.1** and keeps the `primebds`
+plugin name and existing data directory. Rank JSON, player databases, world
+files and chat colors are not replaced by this patch.
+
+## Changes
+
+- Authorize every intercepted player command before privileged side effects.
+- Require both `minecraft.command.op`/`minecraft.command.deop` and
+  `primebds.command.rank` for those aliases, because they change a saved rank.
+- Route op/deop rank changes through ordinary command dispatch, preserving
+  the rank command's permission check and commands.json enable switch.
+- Remove unconditional setOp calls after rank dispatch: only a successful
+  rank application should synchronize operator status.
+- Check permissions again in the plugin command executor and rank handler.
+- Respect command events already cancelled by another plugin.
+
+The panel console remains the recovery/admin interface. `/rank set <player>
+Owner` sets the Owner rank; `/op <player>` continues to select Operator.
+Grant rank-management permission only to users trusted to assign any rank.
+
+## Build in this fork
+
+Push the `chromevale-permissions-fix` branch. The **ChromeVale Linux build**
+workflow builds on Ubuntu 22.04 with Clang 18, runs the C++ authorization
+regression tests, and checks that the binary requires no newer than GLIBC 2.35.
+It uploads `primebds-chromevale-linux-<commit>` with:
+
+- `endstone_primebds.so`
+- `SHA256SUMS`
+- `BUILD-INFO.txt` linking the binary to the source commit and workflow run
+
+The workflow uses only read access to repository contents and does not publish
+a release, deploy the server or delete past workflow runs. On a new fork,
+GitHub may require the owner to enable Actions before the workflow can run.
+
+## What the tests prove
+
+The automated tests exercise the actual authorization helper used by the
+interceptor: member denial, authorized staff delegation, op/deop's two required
+nodes, alias equivalence, permission revocation, and fail-closed handling of
+unknown interception targets. A successful build verifies compatibility with
+the configured Endstone headers; it is not a live BDS permission test or a
+complete audit of every PrimeBDS feature.
+
+## Acceptance test before normal play
+
+Keep the original vulnerable binary disabled. Back up the stopped server,
+especially the world, root permissions.json and plugins/primebds databases.
+Use a test instance/world or a maintenance session with only trusted testers.
+
+1. Stop the server and replace only `plugins/endstone_primebds.so` with the
+   new artifact. Do not install two copies. Preserve the existing data folder.
+2. Start and verify **3.4.3-chromevale.1** loads without errors.
+3. Using the panel, assign a connected test account Default. Check native op
+   status as well. Clear any unintended per-player grants before the test.
+4. From that player's game client, try self-op, op of another tester, deop,
+   rank changes, kick of a trusted tester, and stop. All must be denied with
+   no rank/op changes, disconnects or shutdown. Test aliases/namespaced forms
+   where the server accepts them. A logged command attempt is not proof that
+   it executed: inspect the actual account state and effects.
+5. Verify ordinary chat, whispers and survival play still work. Reconnect and
+   repeat the denial checks. Restart and repeat to verify persistence.
+6. From the panel set the owner back to Owner; verify rank commands and normal
+   administration work. Demote to Default and verify denial immediately.
+7. In a test session, set the rank command disabled in commands.json and
+   restart. Player op/deop aliases must not bypass the disabled command or
+   grant native op. Restore the setting while stopped afterward.
+
+If a check fails, stop and move the patched binary out of plugins. Keep the
+test log and build provenance. Do not restore the vulnerable upstream binary
+for normal multiplayer use; run Endstone without PrimeBDS while investigating.
+
+No chat-format changes are included; message text remains white as requested.
