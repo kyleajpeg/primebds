@@ -145,13 +145,24 @@ namespace primebds {
             }
         }
         const auto mode = player.getGameMode();
+        const bool allowed_flight = player.getAllowFlight();
+        const bool was_flying = player.isFlying();
+        const auto walk_speed = player.getWalkSpeed();
+        const auto fly_speed = player.getFlySpeed();
         if (!utils::mayKeepGameMode(static_cast<int>(mode), [&](const std::string &node) {
                 return player.hasPermission(node);
             })) player.setGameMode(endstone::GameMode::Survival);
         const auto current_mode = player.getGameMode();
         if (!has("fly") && current_mode != endstone::GameMode::Creative &&
-            current_mode != endstone::GameMode::Spectator) player.setAllowFlight(false);
-        if (!has("speed")) { player.setWalkSpeed(0.1f); player.setFlySpeed(0.05f); }
+            current_mode != endstone::GameMode::Spectator) {
+            player.setFlying(false);
+            player.setAllowFlight(false);
+        } else if (has("fly") && mode != current_mode) {
+            player.setAllowFlight(allowed_flight);
+            player.setFlying(allowed_flight && was_flying);
+        }
+        player.setWalkSpeed(has("speed") ? walk_speed : 0.1f);
+        player.setFlySpeed(has("speed") ? fly_speed : 0.05f);
         if (!has("nickname") && !has("nickname.other")) player.setNameTag(player.getName());
     }
 
