@@ -45,7 +45,7 @@ namespace primebds::permissions {
         /// Returns the rank names from the permissions config in order.
         std::vector<std::string> getRanks() const;
 
-        /// Returns true if rank1 outranks rank2 (lower index = higher rank).
+        /// Returns true if rank1 strictly outranks rank2 using validated numeric weights.
         bool checkInternalRank(const std::string &rank1, const std::string &rank2) const;
 
         nlohmann::json PERMISSIONS;

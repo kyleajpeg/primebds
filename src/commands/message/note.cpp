@@ -1,3 +1,4 @@
+#include <algorithm>
 /// @file note.cpp
 /// Add, remove, clear, or list notes on a player!
 
@@ -64,6 +65,10 @@ namespace primebds::commands {
                 return false;
             }
             int id = std::atoi(args[2].c_str());
+            const auto owned = plugin.db->getNotes(user->xuid);
+            if (std::none_of(owned.begin(), owned.end(), [&](const auto &n) { return n.id == id; })) {
+                sender.sendMessage("Note ID does not belong to this player."); return false;
+            }
             plugin.db->removeNote(id);
             sender.sendMessage("\u00a7aNote " + std::to_string(id) + " removed");
             return true;

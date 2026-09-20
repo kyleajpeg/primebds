@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file command_intercept.cpp
 /// Command preprocessing: moderation command remapping, exemption checks.
 
@@ -39,28 +40,7 @@ namespace primebds::handlers::preprocesses {
     }
 
     static std::vector<std::string> splitCommand(const std::string &command) {
-        std::vector<std::string> args;
-        std::istringstream iss(command);
-        std::string token;
-        bool in_quotes = false;
-        std::string current;
-
-        for (size_t i = 0; i < command.size(); ++i) {
-            char c = command[i];
-            if (c == '"') {
-                in_quotes = !in_quotes;
-            } else if (c == ' ' && !in_quotes) {
-                if (!current.empty()) {
-                    args.push_back(current);
-                    current.clear();
-                }
-            } else {
-                current += c;
-            }
-        }
-        if (!current.empty())
-            args.push_back(current);
-        return args;
+        return hierarchy::tokenize(command).value_or(std::vector<std::string>{});
     }
 
     static std::string toLower(const std::string &s) {
@@ -77,8 +57,7 @@ namespace primebds::handlers::preprocesses {
         auto &player = event.getPlayer();
         std::string command = event.getCommand();
         auto args = splitCommand(command);
-        if (args.empty())
-            return;
+        if (args.empty()) { event.setCancelled(true); return; }
 
         auto &cfg = config::ConfigManager::instance();
         auto conf = cfg.config();
@@ -89,9 +68,13 @@ namespace primebds::handlers::preprocesses {
             utils::discordRelay("**" + player.getName() + "** ran: " + command, "cmd");
         }
 
-        std::string cmd = toLower(args[0]);
-        if (!cmd.empty() && cmd[0] == '/')
-            cmd = cmd.substr(1);
+        std::string cmd = hierarchy::canonicalName(args[0]);
+        std::vector<std::string> arguments(args.begin() + 1, args.end());
+        const auto *registered = CommandRegistry::instance().find(cmd);
+        const bool authorized = registered
+            ? hierarchy::authorizePluginCommand(plugin, player, registered->info.name, arguments)
+            : hierarchy::authorizeNativeCommand(plugin, player, cmd, arguments);
+        if (!authorized) { event.setCancelled(true); return; }
 
         if (PARSE_COMMANDS.find(cmd) == PARSE_COMMANDS.end())
             return;
@@ -174,7 +157,7 @@ namespace primebds::handlers::preprocesses {
                 reason += args[i];
             }
 
-            auto matched = utils::getMatchingActors(plugin.getServer(), selector, player);
+            auto matched = utils::getMatchingActors(plugin, selector, player);
             if (matched.empty())
                 return;
 
@@ -182,6 +165,7 @@ namespace primebds::handlers::preprocesses {
                 auto *target_player = actor->asPlayer();
                 if (!target_player)
                     continue;
+                if (!hierarchy::requireTarget(plugin, player, target_player->getName(), false)) return;
 
                 auto target = plugin.db->getOnlineUser(target_player->getXuid());
                 if (target.has_value() && target_player->hasPermission("primebds.exempt.kick")) {
@@ -288,10 +272,11 @@ namespace primebds::handlers::preprocesses {
         }
 
         // Message commands - mute check, msg toggle, whisper, social spy
-        if (MSG_CMDS.count(cmd) && args.size() > 1) {
+        if (MSG_CMDS.count(cmd) && cmd != "say" && args.size() > 1) {
             // Mute check
             auto mod_log = plugin.db->getModLog(player.getXuid());
-            if (mod_log.has_value() && mod_log->is_muted) {
+            if (plugin.silentmutes.count(player.getXuid()) ||
+                (mod_log.has_value() && mod_log->is_muted)) {
                 plugin.db->checkAndUpdateMute(player.getXuid(), player.getName());
                 event.setCancelled(true);
                 return;
@@ -336,17 +321,8 @@ namespace primebds::handlers::preprocesses {
                 }
             }
 
-            // Social spy relay
-            std::string spy_prefix = modules.value("/server_messages/social_spy_prefix"_json_pointer,
-                                                   std::string("\u00a77[SocialSpy] "));
-            for (auto *p : plugin.getServer().getOnlinePlayers()) {
-                auto user = plugin.db->getOnlineUser(p->getXuid());
-                if (user.has_value() && user->enabled_ss == 1 &&
-                    p->hasPermission("primebds.command.socialspy")) {
-                    p->sendMessage(spy_prefix + "\u00a78[\u00a7r" + player.getName() +
-                                   " \u00a77-> \u00a7r" + target + "\u00a78] \u00a77" + message);
-                }
-            }
+            hierarchy::socialSpy(plugin, player, target, message);
+
         }
     }
 
@@ -360,9 +336,7 @@ namespace primebds::handlers::preprocesses {
         if (args.empty())
             return;
 
-        std::string cmd = toLower(args[0]);
-        if (!cmd.empty() && cmd[0] == '/')
-            cmd = cmd.substr(1);
+        std::string cmd = hierarchy::canonicalName(args[0]);
 
         if (PARSE_COMMANDS.find(cmd) == PARSE_COMMANDS.end())
             return;

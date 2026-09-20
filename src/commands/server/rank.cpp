@@ -1,3 +1,5 @@
+#include "primebds/utils/hierarchy.h"
+#include <charconv>
 /// @file rank.cpp
 /// Manage server ranks!
 
@@ -25,7 +27,7 @@ namespace primebds::commands {
                          "/rank (weight)<sub: rank_sub> <rank: string> <weight: int>",
                          "/rank (prefix)<sub: rank_sub> <rank: string> <prefix: message>",
                          "/rank (suffix)<sub: rank_sub> <rank: string> <suffix: message>"};
-                     info.permissions = {"primebds.command.rank"};);
+                     info.permissions = {"primebds.command.rank", "primebds.command.rank.set"};);
 
     static std::string toLower(const std::string &s) {
         std::string out = s;
@@ -46,15 +48,15 @@ namespace primebds::commands {
     /// Manage server ranks!
     static bool cmd_rank(PrimeBDS &plugin, endstone::CommandSender &sender,
                          const std::vector<std::string> &args) {
-        // This handler changes persistent authority. Check locally as well as
-        // at normal command dispatch, so internal callers cannot skip the gate.
-        if (!sender.hasPermission("primebds.command.rank")) {
-            sender.sendMessage("You do not have permission to manage ranks.");
-            return false;
-        }
+        const bool console = hierarchy::isConsole(plugin, sender);
+        const bool full = console || (hierarchy::isOwner(plugin, sender) && sender.hasPermission("primebds.command.rank"));
+        const bool set_only = console || sender.hasPermission("primebds.command.rank.set");
         if (!config::ConfigManager::instance().isCommandEnabled("rank")) {
-            sender.sendMessage("The rank command is disabled.");
-            return false;
+            sender.sendMessage("The rank command is disabled."); return false;
+        }
+        const auto action = args.empty() ? std::string{} : hierarchy::lower(args[0]);
+        if ((!full && action != "set") || (action == "set" && !full && !set_only)) {
+            sender.sendMessage("You do not have permission for this rank subcommand."); return false;
         }
         if (args.empty()) {
             sender.sendMessage("\u00a7cUsage: /rank <set|create|delete|info|perm|list|inherit|weight|prefix|suffix> ...");
@@ -64,6 +66,12 @@ namespace primebds::commands {
         auto &cfg = config::ConfigManager::instance();
         auto &pm = permissions::PermissionManager::instance();
         std::string sub = toLower(args[0]);
+        // Refresh all descendants and overrides immediately after every rank-definition edit.
+        auto refresh = [&]() {
+            pm.reloadPermissionsJson();
+            for (auto *player : plugin.getServer().getOnlinePlayers()) plugin.reloadCustomPerms(*player);
+        };
+
 
         if (sub == "list") {
             auto perms = cfg.loadPermissions();
@@ -90,7 +98,7 @@ namespace primebds::commands {
             }
             perms[name] = {{"permissions", nlohmann::json::object()}, {"inherits", nlohmann::json::array()}, {"weight", 0}};
             cfg.savePermissions(perms);
-            pm.loadPermissions(plugin.getServer());
+            refresh();
             sender.sendMessage("\u00a7aRank \u00a7e" + name + " \u00a7acreated");
             return true;
         }
@@ -102,13 +110,13 @@ namespace primebds::commands {
                 sender.sendMessage("\u00a7cRank \u00a7e" + args[1] + " \u00a7cdoes not exist");
                 return true;
             }
-            if (toLower(key) == "default") {
-                sender.sendMessage("\u00a7cCannot delete the Default rank");
+            if (toLower(key) == "default" || toLower(key) == "owner" || toLower(key) == "operator") {
+                sender.sendMessage("\u00a7cCannot delete a reserved rank");
                 return true;
             }
             perms.erase(key);
             cfg.savePermissions(perms);
-            pm.loadPermissions(plugin.getServer());
+            refresh();
             sender.sendMessage("\u00a7aRank \u00a7e" + key + " \u00a7adeleted");
             return true;
         }
@@ -126,6 +134,28 @@ namespace primebds::commands {
             if (key.empty()) {
                 sender.sendMessage("\u00a7cRank \u00a7e" + rank_name + " \u00a7cdoes not exist");
                 return false;
+            }
+            if (!console) {
+                const auto destination = hierarchy::rankOf(key);
+                const auto grants = pm.getRankPermissions(key);
+                const auto op = grants.find("primebds.minecraft.op");
+                const bool grants_op = op != grants.end() && op->second;
+                if (!hierarchy::canAssign(hierarchy::playerRank(plugin, sender.getName()),
+                        hierarchy::playerRank(plugin, target->getName()), destination,
+                        hierarchy::lower(sender.getName()) == hierarchy::lower(target->getName()), grants_op)) {
+                    sender.sendMessage("Rank assignment denied: target and destination must both be strictly below your rank.");
+                    return false;
+                }
+                // Lower-weight rank definitions must not smuggle unrestricted authority.
+                if (!full) {
+                    for (const auto *danger : {"primebds.command.rank", "primebds.command.permissions",
+                                              "minecraft.command.op", "minecraft.command.deop"}) {
+                        const auto value = grants.find(danger);
+                        if (value != grants.end() && value->second) {
+                            sender.sendMessage("That rank carries protected administrative authority."); return false;
+                        }
+                    }
+                }
             }
             plugin.db->setUserRank(target->getXuid(), key);
             plugin.reloadCustomPerms(*target);
@@ -181,24 +211,22 @@ namespace primebds::commands {
                 perms[key]["permissions"] = nlohmann::json::object();
 
             if (action == "add") {
-                perms[key]["permissions"][perm] = true;
-                cfg.savePermissions(perms);
-                pm.clearPrefixSuffixCache();
-                for (auto *p : plugin.getServer().getOnlinePlayers()) {
-                    auto u = plugin.db->getOnlineUser(p->getXuid());
-                    if (u && toLower(u->internal_rank) == toLower(key))
-                        plugin.reloadCustomPerms(*p);
+                bool state = true;
+                if (args.size() >= 5) {
+                    const auto value = toLower(args[4]);
+                    if (value != "true" && value != "false") {
+                        sender.sendMessage("Permission state must be true or false."); return false;
+                    }
+                    state = value == "true";
                 }
+                perms[key]["permissions"][perm] = state;
+                cfg.savePermissions(perms);
+                refresh();
                 sender.sendMessage("\u00a7aPermission \u00a7e" + perm + " \u00a7aadded to rank \u00a7e" + key);
             } else if (action == "remove") {
                 perms[key]["permissions"].erase(perm);
                 cfg.savePermissions(perms);
-                pm.clearPrefixSuffixCache();
-                for (auto *p : plugin.getServer().getOnlinePlayers()) {
-                    auto u = plugin.db->getOnlineUser(p->getXuid());
-                    if (u && toLower(u->internal_rank) == toLower(key))
-                        plugin.reloadCustomPerms(*p);
-                }
+                refresh();
                 sender.sendMessage("\u00a7aPermission \u00a7e" + perm + " \u00a7aremoved from rank \u00a7e" + key);
             }
             return true;
@@ -239,10 +267,7 @@ namespace primebds::commands {
                 }
                 perms[key]["inherits"].push_back(parent_key);
                 cfg.savePermissions(perms);
-                pm.reloadPermissionsJson();
-                pm.clearAllPermCaches();
-                for (auto *p : plugin.getServer().getOnlinePlayers())
-                    plugin.reloadCustomPerms(*p);
+                refresh();
                 sender.sendMessage("\u00a7aRank \u00a7e" + key + " \u00a7anow inherits from \u00a7e" + parent_key);
             } else if (action == "remove") {
                 nlohmann::json new_inherits = nlohmann::json::array();
@@ -259,10 +284,7 @@ namespace primebds::commands {
                 }
                 perms[key]["inherits"] = new_inherits;
                 cfg.savePermissions(perms);
-                pm.reloadPermissionsJson();
-                pm.clearAllPermCaches();
-                for (auto *p : plugin.getServer().getOnlinePlayers())
-                    plugin.reloadCustomPerms(*p);
+                refresh();
                 sender.sendMessage("\u00a7aRank \u00a7e" + key + " \u00a7ano longer inherits from \u00a7e" + parent_key);
             } else {
                 sender.sendMessage("\u00a7cInvalid action '" + args[1] + "': use add or remove");
@@ -278,9 +300,15 @@ namespace primebds::commands {
                 sender.sendMessage("\u00a7cRank \u00a7e" + args[1] + " \u00a7cdoes not exist");
                 return false;
             }
-            int weight = std::atoi(args[2].c_str());
+            int weight = 0;
+            const auto &value = args[2];
+            auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), weight);
+            if (error != std::errc{} || end != value.data() + value.size()) {
+                sender.sendMessage("Rank weight must be a valid integer."); return false;
+            }
             perms[key]["weight"] = weight;
             cfg.savePermissions(perms);
+            refresh();
             sender.sendMessage("\u00a7aRank \u00a7e" + key + " \u00a7aweight set to \u00a7e" + std::to_string(weight));
             return true;
         }
@@ -299,7 +327,7 @@ namespace primebds::commands {
             }
             perms[key]["prefix"] = prefix;
             cfg.savePermissions(perms);
-            pm.clearPrefixSuffixCache();
+            refresh();
             sender.sendMessage("\u00a7aRank \u00a7e" + key + " \u00a7aprefix set to \u00a7r" + prefix);
             return true;
         }
@@ -318,7 +346,7 @@ namespace primebds::commands {
             }
             perms[key]["suffix"] = suffix;
             cfg.savePermissions(perms);
-            pm.clearPrefixSuffixCache();
+            refresh();
             sender.sendMessage("\u00a7aRank \u00a7e" + key + " \u00a7asuffix set to \u00a7r" + suffix);
             return true;
         }

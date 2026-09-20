@@ -26,7 +26,7 @@ namespace primebds::commands {
             sender.sendMessage("\u00a7cUsage: /itemtag <player> <unbreakable> <true|false> [slotType] [slot]");
             return false;
         }
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        auto targets = utils::getMatchingActors(plugin, args[0], sender);
         std::string tag_type = args[1];
         std::transform(tag_type.begin(), tag_type.end(), tag_type.begin(), ::tolower);
         std::string val_str = args[2];

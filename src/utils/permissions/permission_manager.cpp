@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file permission_manager.cpp
 /// Rank-based permission system implementation.
 
@@ -78,6 +79,9 @@ namespace primebds::permissions {
         std::lock_guard lock(mutex_);
 
         PERMISSIONS = config::ConfigManager::instance().loadPermissions();
+        prefix_cache_.clear();
+        suffix_cache_.clear();
+        perm_cache_.clear();
 
         auto &cfg = config::ConfigManager::instance();
         auto modules = cfg.getModule("permissions_manager");
@@ -107,6 +111,11 @@ namespace primebds::permissions {
         }
 
         if (pb_enabled) {
+            for (const auto &[name, registration] : CommandRegistry::instance().commands())
+                for (const auto &node : registration.info.permissions) all_perms.insert(toLower(node));
+            for (const auto *node : {"primebds.command.rank.set", "primebds.command.fly.other",
+                                    "primebds.command.nickname.other", "primebds.globalmute.exempt",
+                                    "primebds.exempt.back", "primebds.homes.exempt"}) all_perms.insert(node);
             for (auto &p : EXTRA_PERMS)
                 all_perms.insert(toLower(p));
         }
@@ -359,24 +368,7 @@ namespace primebds::permissions {
     }
 
     bool PermissionManager::checkInternalRank(const std::string &rank1, const std::string &rank2) const {
-        auto ranks = getRanks();
-        int idx1 = -1, idx2 = -1;
-        auto r1_lower = rank1;
-        auto r2_lower = rank2;
-        std::transform(r1_lower.begin(), r1_lower.end(), r1_lower.begin(), ::tolower);
-        std::transform(r2_lower.begin(), r2_lower.end(), r2_lower.begin(), ::tolower);
-
-        for (int i = 0; i < static_cast<int>(ranks.size()); ++i) {
-            auto k = ranks[i];
-            std::transform(k.begin(), k.end(), k.begin(), ::tolower);
-            if (k == r1_lower)
-                idx1 = i;
-            if (k == r2_lower)
-                idx2 = i;
-        }
-        if (idx1 < 0 || idx2 < 0)
-            return false;
-        return idx1 < idx2;
+        return hierarchy::outranks(hierarchy::rankOf(rank1), hierarchy::rankOf(rank2));
     }
 
 } // namespace primebds::permissions

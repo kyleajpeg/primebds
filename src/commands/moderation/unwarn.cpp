@@ -1,3 +1,5 @@
+#include "primebds/utils/hierarchy.h"
+#include <algorithm>
 /// @file unwarn.cpp
 /// Remove a warning or clear all warnings from a player!
 
@@ -44,7 +46,7 @@ namespace primebds::commands {
             plugin.db->removeWarning(warnings.back().id);
             sender.sendMessage("\u00a76Warning \u00a7eID " + std::to_string(warnings.back().id) +
                                " \u00a76was pardoned for \u00a7e" + target_name);
-            utils::log(plugin.getServer(), "\u00a7e" + sender.getName() + " \u00a76pardoned warning \u00a7eID " + std::to_string(warnings.back().id) + " \u00a76for \u00a7e" + target_name, "mod");
+            hierarchy::moderationLog(plugin, sender, target_name, "\u00a7e" + sender.getName() + " \u00a76pardoned warning \u00a7eID " + std::to_string(warnings.back().id) + " \u00a76for \u00a7e" + target_name);
             return true;
         }
 
@@ -55,17 +57,21 @@ namespace primebds::commands {
             for (auto &w : warnings)
                 plugin.db->removeWarning(w.id);
             sender.sendMessage("\u00a76All warnings cleared for \u00a7e" + target_name);
-            utils::log(plugin.getServer(), "\u00a7e" + sender.getName() + " \u00a76cleared all warnings for \u00a7e" + target_name, "mod");
+            hierarchy::moderationLog(plugin, sender, target_name, "\u00a7e" + sender.getName() + " \u00a76cleared all warnings for \u00a7e" + target_name);
             return true;
         }
 
         // Try as warning ID
         int warn_id = std::atoi(action.c_str());
         if (warn_id > 0) {
+            const auto owned = plugin.db->getWarnings(user->xuid);
+            if (std::none_of(owned.begin(), owned.end(), [&](const auto &w) { return w.id == warn_id; })) {
+                sender.sendMessage("Warning ID does not belong to this player."); return false;
+            }
             plugin.db->removeWarning(warn_id);
             sender.sendMessage("\u00a76Warning \u00a7eID " + std::to_string(warn_id) +
                                " \u00a76pardoned for \u00a7e" + target_name);
-            utils::log(plugin.getServer(), "\u00a7e" + sender.getName() + " \u00a76pardoned warning \u00a7eID " + std::to_string(warn_id) + " \u00a76for \u00a7e" + target_name, "mod");
+            hierarchy::moderationLog(plugin, sender, target_name, "\u00a7e" + sender.getName() + " \u00a76pardoned warning \u00a7eID " + std::to_string(warn_id) + " \u00a76for \u00a7e" + target_name);
         } else {
             sender.sendMessage("\u00a7cInvalid warning ID");
         }

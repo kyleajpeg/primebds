@@ -41,7 +41,7 @@ namespace primebds::commands {
             return true;
         }
 
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        auto targets = utils::getMatchingActors(plugin, args[0], sender);
         int count = 0;
         for (auto *t : targets) {
             auto *p = t->asPlayer();

@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file reply.cpp
 /// Reply to the last person who messaged you!
 
@@ -28,6 +29,11 @@ namespace primebds::commands {
             return false;
         }
 
+        if (plugin.silentmutes.count(player->getXuid()) ||
+            plugin.db->checkAndUpdateMute(player->getXuid(), player->getName())) {
+            player->sendMessage("You cannot send private messages while muted.");
+            return false;
+        }
         auto user = plugin.db->getOnlineUser(player->getXuid());
         if (!user || user->last_messaged.empty()) {
             sender.sendMessage("\u00a7cYou have nobody to reply to");
@@ -53,16 +59,7 @@ namespace primebds::commands {
         // Update last_messaged for both sides
         plugin.db->updateUser(target->getXuid(), "last_messaged", player->getName());
 
-        // Social spy relay
-        for (auto *p : plugin.getServer().getOnlinePlayers()) {
-            if (p == player || p == target)
-                continue;
-            auto u = plugin.db->getOnlineUser(p->getXuid());
-            if (u && u->enabled_ss) {
-                p->sendMessage("\u00a78[\u00a7eSocialSpy\u00a78] \u00a77" + player->getName() +
-                               " -> " + target->getName() + ": \u00a7f" + msg);
-            }
-        }
+        hierarchy::socialSpy(plugin, *player, target->getName(), msg);
         return true;
     }
 

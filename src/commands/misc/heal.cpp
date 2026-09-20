@@ -32,7 +32,7 @@ namespace primebds::commands {
             sender.sendMessage("\u00a7cYou do not have permission to heal others");
             return true;
         }
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        auto targets = utils::getMatchingActors(plugin, args[0], sender);
         for (auto *t : targets) {
             auto *p = t->asPlayer();
             if (p) {

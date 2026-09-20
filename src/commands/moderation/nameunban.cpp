@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file nameunban.cpp
 /// Unbans a player name from the server!
 
@@ -30,7 +31,7 @@ namespace primebds::commands {
 
         plugin.serverdb->removeNameBan(name);
         sender.sendMessage("\u00a76Name \u00a7e" + name + " \u00a76has been unbanned");
-        utils::log(plugin.getServer(), "\u00a76Name \u00a7e" + name + " \u00a76was unbanned by \u00a7e" + sender.getName(), "mod");
+        hierarchy::moderationLog(plugin, sender, name, "\u00a76Name \u00a7e" + name + " \u00a76was unbanned by \u00a7e" + sender.getName());
         return true;
     }
 

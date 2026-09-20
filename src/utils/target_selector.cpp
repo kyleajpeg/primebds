@@ -1,3 +1,5 @@
+#include "primebds/utils/hierarchy.h"
+#include "primebds/plugin.h"
 /// @file target_selector.cpp
 /// Target selector parsing and entity matching.
 
@@ -138,7 +140,7 @@ namespace primebds::utils {
 
     } // anonymous namespace
 
-    std::vector<endstone::Actor *> getMatchingActors(endstone::Server &server,
+    static std::vector<endstone::Actor *> getMatchingActorsRaw(endstone::Server &server,
                                                      const std::string &selector,
                                                      endstone::CommandSender &origin) {
         auto players = server.getOnlinePlayers();
@@ -212,10 +214,23 @@ namespace primebds::utils {
         return result;
     }
 
-    endstone::Player *resolvePlayerTarget(endstone::Server &server,
+    std::vector<endstone::Actor *> getMatchingActors(PrimeBDS &plugin,
+                                                      const std::string &selector,
+                                                      endstone::CommandSender &origin) {
+        std::vector<endstone::Actor *> result;
+        try { result = getMatchingActorsRaw(plugin.getServer(), selector, origin); }
+        catch (const std::exception &) { origin.sendMessage("Invalid target selector."); return {}; }
+        for (auto *actor : result) {
+            auto *player = actor->asPlayer();
+            if (player && !hierarchy::requireTarget(plugin, origin, player->getName())) return {};
+        }
+        return result;
+    }
+
+    endstone::Player *resolvePlayerTarget(PrimeBDS &plugin,
                                           const std::string &arg,
                                           endstone::CommandSender &origin) {
-        auto actors = getMatchingActors(server, arg, origin);
+        auto actors = getMatchingActors(plugin, arg, origin);
         if (actors.size() == 1)
             return actors[0]->asPlayer();
         return nullptr;

@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file nameban.cpp
 /// Bans a player name from the server!
 
@@ -68,7 +69,7 @@ namespace primebds::commands {
         }
 
         sender.sendMessage("\u00a76Name \u00a7e" + name + " \u00a76has been banned for \u00a7e\"" + reason + "\"");
-        utils::log(plugin.getServer(), "\u00a76Name \u00a7e" + name + " \u00a76was banned by \u00a7e" + sender.getName(), "mod");
+        hierarchy::moderationLog(plugin, sender, name, "\u00a76Name \u00a7e" + name + " \u00a76was banned by \u00a7e" + sender.getName());
         return true;
     }
 

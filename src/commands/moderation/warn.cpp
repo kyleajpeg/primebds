@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file warn.cpp
 /// Warn a player that they are breaking a rule!
 
@@ -77,7 +78,7 @@ namespace primebds::commands {
         std::string expiration_str = utils::formatTimeRemaining(std::time(nullptr) + duration_seconds);
         sender.sendMessage("\u00a76Player \u00a7e" + target_name + " \u00a76was warned for \u00a7e\"" +
                            reason + "\" \u00a76which expires \u00a7e" + expiration_str);
-        utils::log(plugin.getServer(), "\u00a76Player \u00a7e" + target_name + " \u00a76was warned by \u00a7e" + sender.getName() + " \u00a76for \u00a7e\"" + reason + "\"", "mod");
+        hierarchy::moderationLog(plugin, sender, target_name, "\u00a76Player \u00a7e" + target_name + " \u00a76was warned by \u00a7e" + sender.getName() + " \u00a76for \u00a7e\"" + reason + "\"");
         return true;
     }
 

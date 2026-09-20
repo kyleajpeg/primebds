@@ -5,6 +5,8 @@
 #include "primebds/plugin.h"
 #include "primebds/utils/config/config_manager.h"
 #include "primebds/utils/forms.h"
+#include "primebds/utils/hierarchy.h"
+#include "primebds/utils/permissions/permission_manager.h"
 
 #include <algorithm>
 #include <sstream>
@@ -137,6 +139,9 @@ namespace primebds::commands {
 
             auto player_name = player.getName();
             form.show(player, [keys, module_key, sub_key, player_name, &plugin](auto result) {
+                auto *current = plugin.getServer().getPlayer(player_name);
+                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                    !current->hasPermission("primebds.command.primebds")) return;
                 if (!result.has_value())
                     return;
                 auto &cfg = config::ConfigManager::instance();
@@ -182,6 +187,9 @@ namespace primebds::commands {
 
             auto player_name = player.getName();
             form.show(player, [keys, module_key, player_name, &plugin](auto result) {
+                auto *current = plugin.getServer().getPlayer(player_name);
+                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                    !current->hasPermission("primebds.command.primebds")) return;
                 if (!result.has_value())
                     return;
                 auto &cfg = config::ConfigManager::instance();
@@ -227,6 +235,9 @@ namespace primebds::commands {
 
             auto player_name = player.getName();
             form.show(player, [&plugin, module_name, sub_keys, has_primitives, player_name](auto selection) {
+                auto *current = plugin.getServer().getPlayer(player_name);
+                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                    !current->hasPermission("primebds.command.primebds")) return;
                 if (!selection.has_value())
                     return;
                 auto *p = plugin.getServer().getPlayer(player_name);
@@ -266,6 +277,9 @@ namespace primebds::commands {
 
             auto player_name = player.getName();
             form.show(player, [cmd_names, player_name, &plugin](auto result) {
+                auto *current = plugin.getServer().getPlayer(player_name);
+                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                    !current->hasPermission("primebds.command.primebds")) return;
                 if (!result.has_value())
                     return;
                 auto &values = result.value();
@@ -297,6 +311,9 @@ namespace primebds::commands {
 
             auto player_name = player.getName();
             form.show(player, [filename, player_name, &plugin](auto result) {
+                auto *current = plugin.getServer().getPlayer(player_name);
+                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                    !current->hasPermission("primebds.command.primebds")) return;
                 if (!result.has_value())
                     return;
                 auto &values = result.value();
@@ -338,6 +355,9 @@ namespace primebds::commands {
 
             auto player_name = player.getName();
             form.show(player, [&plugin, categories, player_name](auto selection) {
+                auto *current = plugin.getServer().getPlayer(player_name);
+                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                    !current->hasPermission("primebds.command.primebds")) return;
                 if (!selection.has_value())
                     return;
                 auto *p = plugin.getServer().getPlayer(player_name);
@@ -386,6 +406,9 @@ namespace primebds::commands {
 
             auto player_name = player.getName();
             form.show(player, [&plugin, names, player_name](auto selection) {
+                auto *current = plugin.getServer().getPlayer(player_name);
+                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                    !current->hasPermission("primebds.command.primebds")) return;
                 if (!selection.has_value()) return;
                 int idx = selection.value();
                 if (idx < 0 || idx >= static_cast<int>(names.size())) return;
@@ -433,6 +456,8 @@ namespace primebds::commands {
 
         if (sub == "reloadconfig") {
             config::ConfigManager::instance().reload();
+            permissions::PermissionManager::instance().loadPermissions(plugin.getServer());
+            for (auto *online : plugin.getServer().getOnlinePlayers()) plugin.reloadCustomPerms(*online);
             sender.sendMessage("\u00a7dPrimeBDS config reloaded!");
             return true;
         }

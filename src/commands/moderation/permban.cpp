@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file permban.cpp
 /// Permanently bans a player from the server!
 
@@ -66,7 +67,7 @@ namespace primebds::commands {
             target->kick(msg);
 
         sender.sendMessage("\u00a76Player \u00a7e" + target_name + " \u00a76was permanently banned for \u00a7e\"" + reason + "\"");
-        utils::log(plugin.getServer(), "\u00a76Player \u00a7e" + target_name + " \u00a76was permanently banned by \u00a7e" + sender.getName(), "mod");
+        hierarchy::moderationLog(plugin, sender, target_name, "\u00a76Player \u00a7e" + target_name + " \u00a76was permanently banned by \u00a7e" + sender.getName());
         return true;
     }
 

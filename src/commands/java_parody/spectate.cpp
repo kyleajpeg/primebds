@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file spectate.cpp
 /// Warp to a player to spectate them!
 
@@ -54,7 +55,7 @@ namespace primebds::commands {
         for (auto *p : plugin.getServer().getOnlinePlayers()) {
             if (p == player)
                 continue;
-            if (!is_valid_spectate_target(p))
+            if (!hierarchy::mayTarget(plugin, sender, p->getName(), false) || !is_valid_spectate_target(p))
                 continue;
             candidates.push_back(p);
         }
@@ -66,7 +67,7 @@ namespace primebds::commands {
 
         if (!args.empty()) {
             // Direct target via selector or name
-            auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+            auto targets = utils::getMatchingActors(plugin, args[0], sender);
             if (targets.empty()) {
                 sender.sendMessage("\u00a7cUnable to find target player");
                 return false;
@@ -98,15 +99,16 @@ namespace primebds::commands {
             form.addButton(c->getName());
         }
 
-        form.setOnSubmit([candidates](endstone::Player *p, int selection) {
-            if (selection >= 0 && selection < static_cast<int>(candidates.size())) {
-                auto *target = candidates[selection];
-                if (target && is_valid_spectate_target(target)) {
-                    warp_player(p, target);
-                } else {
-                    p->sendMessage("\u00a7cThat player is no longer available.");
-                }
-            } });
+        std::vector<std::string> names;
+        for (auto *candidate : candidates) names.push_back(candidate->getName());
+        form.setOnSubmit([&plugin, names](endstone::Player *p, int selection) {
+            if (!p || !p->hasPermission("primebds.command.spectate")) return;
+            if (selection < 0 || selection >= static_cast<int>(names.size())) return;
+            auto *target = plugin.getServer().getPlayer(names[selection]);
+            if (target && hierarchy::mayTarget(plugin, *p, target->getName(), false) && is_valid_spectate_target(target))
+                warp_player(p, target);
+            else p->sendMessage("That player is unavailable or protected by rank.");
+        });
 
         player->sendForm(std::move(form));
         return true;

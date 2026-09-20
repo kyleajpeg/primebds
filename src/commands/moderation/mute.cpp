@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file mute.cpp
 /// Permanently mutes a player on the server!
 
@@ -66,7 +67,7 @@ namespace primebds::commands {
         }
 
         sender.sendMessage("\u00a76Player \u00a7e" + target_name + " \u00a76was permanently muted for \u00a7e\"" + reason + "\"");
-        utils::log(plugin.getServer(), "\u00a76Player \u00a7e" + target_name + " \u00a76was permanently muted by \u00a7e" + sender.getName() + " \u00a76for \u00a7e\"" + reason + "\"", "mod");
+        hierarchy::moderationLog(plugin, sender, target_name, "\u00a76Player \u00a7e" + target_name + " \u00a76was permanently muted by \u00a7e" + sender.getName() + " \u00a76for \u00a7e\"" + reason + "\"");
         return true;
     }
 

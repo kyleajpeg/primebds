@@ -32,7 +32,7 @@ namespace primebds::commands {
             }
             return true;
         }
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        auto targets = utils::getMatchingActors(plugin, args[0], sender);
         for (auto *t : targets) {
             if (auto *p = t->asPlayer()) {
                 if (p->getGameMode() == endstone::GameMode::Creative) {

@@ -7,13 +7,14 @@
 #include <string>
 #include <vector>
 
+namespace primebds { class PrimeBDS; }
 namespace primebds::utils {
 
-    std::vector<endstone::Actor *> getMatchingActors(endstone::Server &server,
+    std::vector<endstone::Actor *> getMatchingActors(PrimeBDS &plugin,
                                                      const std::string &selector,
                                                      endstone::CommandSender &origin);
 
-    endstone::Player *resolvePlayerTarget(endstone::Server &server,
+    endstone::Player *resolvePlayerTarget(PrimeBDS &plugin,
                                           const std::string &arg,
                                           endstone::CommandSender &origin);
 

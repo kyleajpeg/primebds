@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file tempmute.cpp
 /// Temporarily mutes a player on the server!
 
@@ -90,7 +91,7 @@ namespace primebds::commands {
 
         sender.sendMessage("\u00a76Player \u00a7e" + target_name + " \u00a76was muted for \u00a7e\"" +
                            reason + "\" \u00a76for \u00a7e" + time_str);
-        utils::log(plugin.getServer(), "\u00a76Player \u00a7e" + target_name + " \u00a76was muted by \u00a7e" + sender.getName() + " \u00a76for \u00a7e\"" + reason + "\" \u00a76until \u00a7e" + time_str, "mod");
+        hierarchy::moderationLog(plugin, sender, target_name, "\u00a76Player \u00a7e" + target_name + " \u00a76was muted by \u00a7e" + sender.getName() + " \u00a76for \u00a7e\"" + reason + "\" \u00a76until \u00a7e" + time_str);
         return true;
     }
 

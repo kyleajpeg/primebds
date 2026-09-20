@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file clearchat.cpp
 /// Clears the chat for all players!
 
@@ -22,7 +23,7 @@ namespace primebds::commands {
             clear += "\n";
 
         for (auto *p : plugin.getServer().getOnlinePlayers()) {
-            p->sendMessage(clear);
+            if (hierarchy::mayTarget(plugin, sender, p->getName())) p->sendMessage(clear);
         }
         plugin.getServer().broadcastMessage("\u00a7eChat has been cleared by \u00a7b" + sender.getName());
         return true;

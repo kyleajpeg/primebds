@@ -27,7 +27,7 @@ namespace primebds::commands {
             player->sendMessage("Set own game mode to Adventure");
             return true;
         }
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        auto targets = utils::getMatchingActors(plugin, args[0], sender);
         for (auto *t : targets) {
             if (auto *p = t->asPlayer()) {
                 p->setGameMode(endstone::GameMode::Adventure);

@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file ipmute.cpp
 /// IP mutes a player on the server!
 
@@ -82,7 +83,7 @@ namespace primebds::commands {
         std::string time_str = utils::formatTimeRemaining(expiration);
         sender.sendMessage("\u00a76Player \u00a7e" + target_name + " \u00a76was IP muted for \u00a7e\"" +
                            reason + "\" \u00a76for \u00a7e" + time_str);
-        utils::log(plugin.getServer(), "\u00a76Player \u00a7e" + target_name + " \u00a76was IP muted by \u00a7e" + sender.getName(), "mod");
+        hierarchy::moderationLog(plugin, sender, target_name, "\u00a76Player \u00a7e" + target_name + " \u00a76was IP muted by \u00a7e" + sender.getName());
         return true;
     }
 

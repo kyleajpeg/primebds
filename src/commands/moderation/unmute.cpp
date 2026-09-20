@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file unmute.cpp
 /// Removes an active mute from a player!
 
@@ -36,7 +37,8 @@ namespace primebds::commands {
         }
 
         auto modlog = plugin.db->getModLog(user->xuid);
-        if (!modlog || !modlog->is_muted) {
+        const bool silent = plugin.silentmutes.erase(user->xuid) != 0;
+        if ((!modlog || !modlog->is_muted) && !silent) {
             sender.sendMessage("\u00a76Player \u00a7e" + target_name + " \u00a76is not muted");
             return false;
         }
@@ -46,7 +48,7 @@ namespace primebds::commands {
         plugin.db->updateModLog(user->xuid, "mute_reason", "");
 
         sender.sendMessage("\u00a76Player \u00a7e" + target_name + " \u00a76has been unmuted");
-        utils::log(plugin.getServer(), "\u00a76Player \u00a7e" + target_name + " \u00a76was unmuted by \u00a7e" + sender.getName(), "mod");
+        hierarchy::moderationLog(plugin, sender, target_name, "\u00a76Player \u00a7e" + target_name + " \u00a76was unmuted by \u00a7e" + sender.getName());
 
         auto *target = plugin.getServer().getPlayer(target_name);
         if (target)

@@ -67,7 +67,7 @@ namespace primebds::commands {
                            { return std::tolower(c); });
 
             if (sub == "clear") {
-                auto targets = utils::getMatchingActors(plugin.getServer(), target_selector, sender);
+                auto targets = utils::getMatchingActors(plugin, target_selector, sender);
                 int removed = 0;
                 for (auto *t : targets) {
                     if (auto *p = t->asPlayer()) {
@@ -112,7 +112,7 @@ namespace primebds::commands {
             title += args[i];
         }
 
-        auto targets = utils::getMatchingActors(plugin.getServer(), target_selector, sender);
+        auto targets = utils::getMatchingActors(plugin, target_selector, sender);
         if (targets.empty()) {
             sender.sendMessage("\u00a7cNo matching players found for " + target_selector + "!");
             return false;

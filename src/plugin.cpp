@@ -235,12 +235,8 @@ namespace primebds {
         {
             auto op_it = final_permissions.find("primebds.minecraft.op");
             bool wants_op = op_it != final_permissions.end() && op_it->second;
-            if (wants_op && !player.isOp() && player.isValid())
-                (void)getServer().dispatchCommand(getServer().getCommandSender(),
-                                                  "op \"" + user->name + "\"");
-            else if (!wants_op && player.isOp() && player.isValid())
-                (void)getServer().dispatchCommand(getServer().getCommandSender(),
-                                                  "deop \"" + user->name + "\"");
+            if (player.isValid() && wants_op != player.isOp()) player.setOp(wants_op);
+
         }
 
         player.updateCommands();
@@ -342,7 +338,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.5", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.6", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

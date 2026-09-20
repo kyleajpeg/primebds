@@ -47,7 +47,7 @@ namespace primebds::commands {
             }
         }
 
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        auto targets = utils::getMatchingActors(plugin, args[0], sender);
         if (targets.empty()) {
             sender.sendMessage("\u00a7cNo matching players found");
             return false;

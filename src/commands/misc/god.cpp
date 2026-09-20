@@ -37,7 +37,7 @@ namespace primebds::commands {
             sender.sendMessage("\u00a7cYou do not have permission to modify others' invulnerability");
             return true;
         }
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        auto targets = utils::getMatchingActors(plugin, args[0], sender);
         std::string force = (args.size() > 1) ? args[1] : "";
         int updated = 0;
         for (auto *t : targets) {

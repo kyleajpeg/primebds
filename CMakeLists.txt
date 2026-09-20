@@ -78,6 +78,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 option(PRIMEBDS_BUILD_TESTS "Build permission, audit and player default regression tests" ON)
 if(PRIMEBDS_BUILD_TESTS)
     enable_testing()
+    add_executable(hierarchy_policy_test tests/hierarchy_policy_test.cpp)
+    target_include_directories(hierarchy_policy_test PRIVATE include)
+    add_test(NAME hierarchy_policy COMMAND hierarchy_policy_test)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_test(NAME hierarchy_coverage COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tests/hierarchy_coverage.py ${CMAKE_SOURCE_DIR})
     add_executable(command_authorization_test tests/command_authorization_test.cpp)
     target_include_directories(command_authorization_test PRIVATE include)
     add_test(NAME command_authorization COMMAND command_authorization_test)

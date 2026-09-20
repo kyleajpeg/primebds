@@ -52,7 +52,7 @@ namespace primebds::commands {
         if (block_id.find("invisiblebedrock") != std::string::npos)
             block_id = "invisible_bedrock";
 
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        auto targets = utils::getMatchingActors(plugin, args[0], sender);
         if (targets.empty()) {
             sender.sendMessage("\u00a7cNo matching players found");
             return false;

@@ -1,3 +1,4 @@
+#include <algorithm>
 /// @file warnings.cpp
 /// List or delete warnings for a player!
 
@@ -41,6 +42,10 @@ namespace primebds::commands {
             std::string action = args[1];
             if (action == "delete" && args.size() >= 3) {
                 int id = std::atoi(args[2].c_str());
+                const auto owned = plugin.db->getWarnings(user->xuid);
+                if (std::none_of(owned.begin(), owned.end(), [&](const auto &w) { return w.id == id; })) {
+                    sender.sendMessage("Warning ID does not belong to this player."); return false;
+                }
                 plugin.db->removeWarning(id);
                 sender.sendMessage("\u00a76Warning \u00a7eID " + std::to_string(id) + " \u00a76was erased");
                 return true;

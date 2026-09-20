@@ -1,3 +1,4 @@
+#include "primebds/utils/hierarchy.h"
 /// @file command_registry.cpp
 /// Command registration and dispatch infrastructure.
 
@@ -11,7 +12,11 @@ namespace primebds {
     }
 
     void CommandRegistry::registerCommand(const CommandInfo &info, CommandHandler handler) {
-        CommandRegistration reg{info, std::move(handler)};
+        CommandRegistration reg{info, [name = info.name, handler = std::move(handler)](
+            PrimeBDS &plugin, endstone::CommandSender &sender, const std::vector<std::string> &args) {
+            if (!hierarchy::authorizePluginCommand(plugin, sender, name, args)) return false;
+            return handler(plugin, sender, args);
+        }};
         commands_[info.name] = std::move(reg);
 
         // Also register aliases

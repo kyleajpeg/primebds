@@ -78,7 +78,7 @@ namespace primebds::handlers {
 
         // Staff chat check
         auto user = plugin.db->getOnlineUser(xuid);
-        if (user && user->enabled_sc) {
+        if (user && user->enabled_sc && player.hasPermission("primebds.command.staffchat")) {
             auto sc_cfg = cfg.getModule("better_chat");
             auto safe_msg = escapeBraces(event.getMessage());
             auto msg = "§7[Staff] §e" + player.getName() + "§7: §6" + safe_msg;

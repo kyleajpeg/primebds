@@ -598,7 +598,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
             "/rank (weight)<sub: rank_sub> <rank: string> <weight: int>",
             "/rank (prefix)<sub: rank_sub> <rank: string> <prefix: message>",
             "/rank (suffix)<sub: rank_sub> <rank: string> <suffix: message>")
-        .permissions("primebds.command.rank");
+        .permissions("primebds.command.rank", "primebds.command.rank.set");
 
     cmd(b, "reloadscripts").description("Reloads server scripts!")
         .usages("/reloadscripts")

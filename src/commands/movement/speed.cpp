@@ -21,7 +21,7 @@ namespace primebds::commands {
             return false;
         }
         auto targets = request->target.empty() ? std::vector<endstone::Actor *>{self}
-            : utils::getMatchingActors(plugin.getServer(), request->target, sender);
+            : utils::getMatchingActors(plugin, request->target, sender);
         int count = 0;
         for (auto *actor : targets) {
             auto *player = actor->asPlayer();

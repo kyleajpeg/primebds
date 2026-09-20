@@ -23,7 +23,7 @@ namespace primebds::commands {
             return false;
         }
 
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        auto targets = utils::getMatchingActors(plugin, args[0], sender);
         std::string address = args[1];
 
         // Parse ip:port from address

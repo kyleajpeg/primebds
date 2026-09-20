@@ -1,0 +1,157 @@
+#include "primebds/utils/hierarchy.h"
+#include "primebds/plugin.h"
+#include "primebds/utils/permissions/permission_manager.h"
+#include "primebds/utils/target_selector.h"
+#include "primebds/utils/item_slot.h"
+#include "primebds/utils/logging.h"
+#include <set>
+
+namespace primebds::hierarchy {
+Rank rankOf(const std::string &name) {
+    auto &data = permissions::PermissionManager::instance().PERMISSIONS;
+    for (auto &[key, value] : data.items()) {
+        if (lower(key) != lower(name)) continue;
+        if (!value.is_object() || !value.contains("weight") || !value["weight"].is_number_integer())
+            return {key, std::nullopt};
+        try { return {key, value["weight"].get<std::int64_t>()}; }
+        catch (...) { return {key, std::nullopt}; }
+    }
+    return {name, std::nullopt};
+}
+Rank playerRank(PrimeBDS &plugin, const std::string &name) {
+    auto user = plugin.db->getUserByName(name);
+    return user ? rankOf(user->internal_rank) : Rank{"", std::nullopt};
+}
+bool isConsole(PrimeBDS &plugin, endstone::CommandSender &sender) {
+    return &sender == &plugin.getServer().getCommandSender();
+}
+bool isOwner(PrimeBDS &plugin, endstone::CommandSender &sender) {
+    if (isConsole(plugin, sender)) return true;
+    auto *player = sender.asPlayer();
+    if (!player) return false;
+    auto rank = playerRank(plugin, player->getName());
+    return rank.weight.has_value() && lower(rank.name) == "owner";
+}
+bool mayTarget(PrimeBDS &plugin, endstone::CommandSender &sender, const std::string &target, bool allow_self) {
+    if (isConsole(plugin, sender)) return true;
+    auto *player = sender.asPlayer();
+    if (!player) return false;
+    return canTarget(playerRank(plugin, player->getName()), playerRank(plugin, target),
+                     lower(player->getName()) == lower(target), allow_self);
+}
+bool requireTarget(PrimeBDS &plugin, endstone::CommandSender &sender, const std::string &target, bool allow_self) {
+    if (mayTarget(plugin, sender, target, allow_self)) return true;
+    sender.sendMessage("Target denied: you may only affect strictly lower ranks (unknown ranks are protected).");
+    return false;
+}
+bool mayObserve(PrimeBDS &plugin, endstone::Player &viewer, const std::vector<std::string> &participants) {
+    std::vector<Rank> ranks;
+    for (const auto &name : participants) ranks.push_back(playerRank(plugin, name));
+    return canObserve(playerRank(plugin, viewer.getName()), ranks);
+}
+bool authorizePluginCommand(PrimeBDS &plugin, endstone::CommandSender &sender,
+                            const std::string &raw_name, const std::vector<std::string> &args) {
+    if (isConsole(plugin, sender)) return true;
+    if (!sender.asPlayer()) return false;
+    auto name = canonicalName(raw_name);
+    auto *registration = CommandRegistry::instance().find(name);
+    if (registration) name = registration->info.name;
+    auto policy = commandPolicy(name);
+    if (policy == CommandPolicy::Owner || policy == CommandPolicy::Permissions) {
+        if (!isOwner(plugin, sender)) {
+            sender.sendMessage("This administration command is reserved for Owner or the panel console.");
+            return false;
+        }
+        if (policy == CommandPolicy::Permissions && !args.empty())
+            return requireTarget(plugin, sender, args[0], false);
+        return true;
+    }
+    if (policy == CommandPolicy::Console || policy == CommandPolicy::Deny) {
+        sender.sendMessage("This command needs the panel console: its broad effects cannot be limited to lower ranks.");
+        return false;
+    }
+    if (policy == CommandPolicy::Rank) return true; // Checked again inside rank.cpp, including direct callers.
+    if (policy == CommandPolicy::Named || policy == CommandPolicy::Moderation) {
+        if (args.empty()) return true; // No side effects; handler prints usage.
+        if (name == "silentmute") return true; // Filter actual resolved targets, not a second random selection.
+        return requireTarget(plugin, sender, args[0], policy == CommandPolicy::Named);
+    }
+    // Every selector-using handler filters the actual resolved targets in getMatchingActors.
+    if (name == "playtime" && !args.empty()) return requireTarget(plugin, sender, args[0]);
+    if (name == "ping" && !args.empty() && !args[0].empty() && args[0].front() != '@')
+        return requireTarget(plugin, sender, args[0]); // Includes offline fallback.
+    return true;
+}
+bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
+                            const std::string &raw_name, const std::vector<std::string> &args) {
+    const auto name = canonicalName(raw_name);
+    // Communication is not an administrative action. Spy recipients have their own strict gate.
+    static const std::set<std::string> ordinary = {"help", "list", "me", "tell", "w", "whisper", "msg", "say",
+        "version", "plugins", "status", "seed", "packstack", "banlist"};
+    if (ordinary.contains(name)) return true;
+    // Indirect execution and ambiguous/global native commands are not a delegation escape hatch.
+    static const std::set<std::string> console_only = {"execute", "function", "schedule", "script", "scriptevent",
+        "wsserver", "permission", "allowlist", "whitelist", "ban-ip", "banip", "unban-ip", "pardon-ip",
+        "reload", "reloadconfig", "reloadpacketlimitconfig", "changesetting", "gametest"};
+    if (console_only.contains(name)) {
+        sender.sendMessage("Use the panel console for indirect execution or server-wide configuration.");
+        return false;
+    }
+    // World/operational changes remain Owner-only; this policy protects direct player targeting,
+    // not terrain, PvP, plugin code or trusted console access.
+    static const std::set<std::string> owner_world = {"stop", "save", "difficulty", "gamerule", "time", "weather",
+        "toggledownfall", "daylock", "fill", "clone", "setblock", "structure", "place", "summon", "locate",
+        "setworldspawn", "mobevent", "tickingarea", "setmaxplayers", "scoreboard"};
+    if (owner_world.contains(name)) {
+        if (isOwner(plugin, sender) && name != "scoreboard") return true;
+        sender.sendMessage("Use Owner/panel for world administration; scoreboard targeting requires the panel.");
+        return false;
+    }
+    std::size_t index = 0;
+    bool allow_self = true;
+    static const std::set<std::string> first_target = {"kick", "ban", "pardon", "unban", "op", "deop",
+        "give", "clear", "kill", "effect", "enchant", "title", "titleraw", "tellraw", "damage", "inputpermission",
+        "camera", "hud", "fog", "playanimation", "stopsound", "spawnpoint", "clearspawnpoint", "tag", "transfer"};
+    if (name == "gamemode" || name == "xp" || name == "playsound") index = 1;
+    else if (name == "teleport" || name == "tp") {
+        // Accept a literal victim and literal player destination. Complex native selector/coordinate
+        // execution has different semantics from PrimeBDS selectors, so keep it console-only.
+        if (args.size() != 2) { sender.sendMessage("Use /tp <player> <player>; complex teleport forms require the panel."); return false; }
+        for (const auto &target : args)
+            if (target.empty() || target.front() == '@' || !requireTarget(plugin, sender, target)) return false;
+        return true;
+    } else if (!first_target.contains(name)) {
+        sender.sendMessage("This native command has no reviewed hierarchy policy; use the panel console.");
+        return false;
+    }
+    if (name == "kick" || name == "ban" || name == "pardon" || name == "unban" || name == "op" || name == "deop")
+        allow_self = false;
+    if (args.size() <= index) return true; // Missing target: native usage/self-only form.
+    std::string target = args[index];
+    if (target == "@s") target = sender.getName();
+    if (target.empty() || target.front() == '@') {
+        sender.sendMessage("Native multi-target selectors require the panel; use a player name or an Endstone command.");
+        return false;
+    }
+    return requireTarget(plugin, sender, target, allow_self);
+}
+void socialSpy(PrimeBDS &plugin, endstone::Player &sender, const std::string &target, const std::string &message) {
+    for (auto *viewer : plugin.getServer().getOnlinePlayers()) {
+        auto state = plugin.db->getOnlineUser(viewer->getXuid());
+        if (state && state->enabled_ss && viewer->hasPermission("primebds.command.socialspy") &&
+            mayObserve(plugin, *viewer, {sender.getName(), target}))
+            viewer->sendMessage("§8[§eSocialSpy§8] §7" + sender.getName() + " -> " + target + ": §f" + message);
+    }
+}
+void moderationLog(PrimeBDS &plugin, endstone::CommandSender &sender,
+                   const std::string &target, const std::string &message) {
+    utils::discordRelay(message, "mod");
+    // Console-origin records are never broadcast to spies: there is no lower-ranked actor.
+    if (!sender.asPlayer()) return;
+    for (auto *viewer : plugin.getServer().getOnlinePlayers()) {
+        auto state = plugin.db->getOnlineUser(viewer->getXuid());
+        if (state && state->enabled_ms && viewer->hasPermission("primebds.command.modspy") &&
+            mayObserve(plugin, *viewer, {sender.getName(), target})) viewer->sendMessage(message);
+    }
+}
+} // namespace primebds::hierarchy

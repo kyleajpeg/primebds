@@ -18,7 +18,7 @@ namespace primebds::commands {
             return false;
         }
         auto targets = args.size() < 2 ? std::vector<endstone::Actor *>{self}
-            : utils::getMatchingActors(plugin.getServer(), args[1], sender);
+            : utils::getMatchingActors(plugin, args[1], sender);
         int count = 0;
         for (auto *actor : targets) {
             auto *player = actor->asPlayer();
