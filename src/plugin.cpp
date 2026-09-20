@@ -9,6 +9,7 @@
 #include "primebds/utils/command_audit.h"
 #include "primebds/utils/hierarchy.h"
 #include "primebds/utils/player_state_policy.h"
+#include "primebds/utils/permission_snapshot.h"
 
 #include "primebds/commands/command_metadata.h"
 
@@ -215,14 +216,7 @@ namespace primebds {
             }
         }
 
-        // Match the plugin-prefix overrides applied to live attachments.
-        for (auto &[node, value] : final_permissions) {
-            const auto prefix = node.substr(0, node.find('.'));
-            if (prefix == "minecraft" || prefix == "endstone") continue;
-            auto star = final_permissions.find(prefix + ".command");
-            if (star == final_permissions.end()) star = final_permissions.find(prefix);
-            if (star != final_permissions.end()) value = star->second;
-        }
+        utils::applyPluginPermissionGroups(final_permissions);
         return final_permissions;
     }
 

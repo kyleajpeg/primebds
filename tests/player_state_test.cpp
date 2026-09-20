@@ -1,5 +1,6 @@
 #include "primebds/utils/database/user_db.h"
 #include "primebds/utils/player_state_policy.h"
+#include "primebds/utils/permission_snapshot.h"
 #include <filesystem>
 #include <chrono>
 #include <iostream>
@@ -98,6 +99,15 @@ int main() {
             check(!reopened.getOnlineUser("one")->enabled_ss, "Revocation survives restart");
             check(reopened.getWarnings("one").size()==3, "Warnings survive repeated migration/startup");
         }
+        std::map<std::string,bool> grouped{{"primebds.command",true}, {"primebds.command.speed",false},
+            {"primebds.minecraft.op",false}, {"minecraft.command",true}, {"minecraft.command.op",false}};
+        utils::applyPluginPermissionGroups(grouped);
+        check(grouped["primebds.command.speed"], "Plugin command group resolves consistently for saved and live state");
+        check(!grouped["primebds.minecraft.op"] && !grouped["minecraft.command.op"], "Command groups never manufacture native operator authority");
+        grouped["primebds.minecraft.op"]=true;
+        grouped["primebds.command"]=false;
+        utils::applyPluginPermissionGroups(grouped);
+        check(grouped["primebds.minecraft.op"] && !grouped["primebds.command.speed"], "Explicit native OP marker is independent of plugin command groups");
         std::map<std::string,bool> permissions;
         auto has=[&](const std::string &node){return permissions[node];};
         check(utils::mayKeepGameMode(0,has), "Survival is always retained");
