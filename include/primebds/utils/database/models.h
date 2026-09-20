@@ -48,7 +48,7 @@ namespace primebds::db {
         int64_t last_leave = 0;
         std::string last_logout_pos;
         std::string last_logout_dim;
-        int enabled_mt = 0;
+        int enabled_mt = 1;
         int enabled_ss = 0;
         int enabled_ms = 0;
         int enabled_as = 0;

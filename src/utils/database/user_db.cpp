@@ -32,7 +32,7 @@ namespace primebds::db {
                               {"last_leave", "INTEGER DEFAULT 0"},
                               {"last_logout_pos", "TEXT DEFAULT ''"},
                               {"last_logout_dim", "TEXT DEFAULT ''"},
-                              {"enabled_mt", "INTEGER DEFAULT 0"},
+                              {"enabled_mt", "INTEGER DEFAULT 1"},
                               {"enabled_ss", "INTEGER DEFAULT 0"},
                               {"enabled_ms", "INTEGER DEFAULT 0"},
                               {"enabled_as", "INTEGER DEFAULT 0"},
@@ -87,10 +87,13 @@ namespace primebds::db {
                 {uuid, name, std::to_string(ping), device_os, device_id,
                  std::to_string(unique_id), client_ver, now, xuid});
         } else {
+            // Set the preference explicitly: existing databases retain their
+            // original column default (0). Only new players get this default;
+            // the returning-player UPDATE above preserves their saved choice.
             execute(
                 "INSERT INTO users (xuid, uuid, name, ping, device_os, device_id, "
-                "unique_id, client_ver, internal_rank, last_join) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'default', ?)",
+                "unique_id, client_ver, internal_rank, last_join, enabled_mt) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'default', ?, 1)",
                 {xuid, uuid, name, std::to_string(ping), device_os, device_id,
                  std::to_string(unique_id), client_ver, now});
         }

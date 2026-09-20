@@ -1,11 +1,21 @@
 # ChromeVale permission fix
 
 Based on upstream PrimeBDS v3.4.3, commit 4979fe2ae044828c834433655c83f2c1b177fb11.
-The plugin identifies itself as **3.4.3-chromevale.2** and keeps the `primebds`
+The plugin identifies itself as **3.4.3-chromevale.3** and keeps the `primebds`
 plugin name and existing data directory. Rank JSON, player databases, world
 files and chat colors are not replaced by this patch.
 
 ## Changes
+
+- Version `.3` makes private messages enabled (`enabled_mt=1`) when a player
+  is first inserted into the user database. The INSERT supplies the value
+  explicitly, so this also works on existing databases whose column default
+  remains 0. Existing preferences are not migrated or reset on reconnect,
+  restart or rank change. There is no new configuration key. The Default
+  rank's `primebds.command.msgtoggle` grant still controls access to the toggle.
+  Database integration tests exercise the actual UserDB implementation with
+  fresh and legacy schemas and verify persistence of both enabled and disabled
+  choices. No rank JSON or live database is included in this update.
 
 - Version `.2` adds a console `[CommandAudit]` entry for every player command
   event received, before PrimeBDS checks permissions or remaps commands.
@@ -68,7 +78,7 @@ Use a test instance/world or a maintenance session with only trusted testers.
 
 1. Stop the server and replace only `plugins/endstone_primebds.so` with the
    new artifact. Do not install two copies. Preserve the existing data folder.
-2. Start and verify **3.4.3-chromevale.2** loads without errors.
+2. Start and verify **3.4.3-chromevale.3** loads without errors.
 3. Using the panel, assign a connected test account Default. Check native op
    status as well. Clear any unintended per-player grants before the test.
 4. From that player's game client, try self-op, op of another tester, deop,

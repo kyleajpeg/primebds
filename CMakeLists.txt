@@ -75,7 +75,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     sqlite3
 )
 
-option(PRIMEBDS_BUILD_TESTS "Build permission and audit regression tests" ON)
+option(PRIMEBDS_BUILD_TESTS "Build permission, audit and player default regression tests" ON)
 if(PRIMEBDS_BUILD_TESTS)
     enable_testing()
     add_executable(command_authorization_test tests/command_authorization_test.cpp)
@@ -84,6 +84,13 @@ if(PRIMEBDS_BUILD_TESTS)
     add_executable(command_audit_test tests/command_audit_test.cpp)
     target_include_directories(command_audit_test PRIVATE include)
     add_test(NAME command_audit COMMAND command_audit_test)
+    add_executable(user_message_defaults_test
+        tests/user_message_defaults_test.cpp
+        src/utils/database/user_db.cpp
+        src/utils/database/database_manager.cpp)
+    target_include_directories(user_message_defaults_test PRIVATE include)
+    target_link_libraries(user_message_defaults_test PRIVATE nlohmann_json::nlohmann_json sqlite3)
+    add_test(NAME user_message_defaults COMMAND user_message_defaults_test)
 endif()
 
 # Copy plugin binary to output/ folder after build
