@@ -17,13 +17,24 @@ struct Rank {
     std::string name;
     std::optional<std::int64_t> weight;
 };
+inline bool privileged(const Rank &rank) {
+    return rank.weight.has_value() && (lower(rank.name) == "owner" || lower(rank.name) == "operator");
+}
+inline bool canAccessWarnings(bool admin, bool own, bool editing, bool self_permission,
+                              bool staff_permission, bool lower_target) {
+    if (admin) return true;
+    if (own) return !editing && (self_permission || staff_permission);
+    return staff_permission && lower_target;
+}
 inline bool outranks(const Rank &actor, const Rank &target) {
+    if (privileged(actor)) return true;
     if (!actor.weight || !target.weight || lower(actor.name) == lower(target.name)) return false;
     if (lower(target.name) == "owner") return false;
     if (lower(target.name) == "operator" && lower(actor.name) != "owner") return false;
     return *actor.weight > *target.weight;
 }
 inline bool canTarget(const Rank &actor, const Rank &target, bool same_player, bool allow_self) {
+    if (privileged(actor)) return true;
     if (!actor.weight || !target.weight) return false;
     return same_player ? allow_self : outranks(actor, target);
 }
@@ -34,6 +45,7 @@ inline bool canObserve(const Rank &viewer, const std::vector<Rank> &participants
 }
 inline bool canAssign(const Rank &actor, const Rank &current, const Rank &destination,
                       bool same_player, bool grants_op) {
+    if (privileged(actor)) return true;
     if (same_player || !outranks(actor, current) || !outranks(actor, destination)) return false;
     if (grants_op && lower(actor.name) != "owner") return false;
     return true;

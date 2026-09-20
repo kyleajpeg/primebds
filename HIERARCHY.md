@@ -1,5 +1,8 @@
 # ChromeVale .6: staff hierarchy
 
+> For .7, see [administrator and state refinements](ADMIN-REFINEMENTS.md).
+> Owner/Operator now bypass these restrictions; ordinary ranks retain them.
+
 This revision adds shared rank checks to PrimeBDS target resolution, registered
 command handlers and player command interception. Permission nodes still decide
 which commands a player can run; rank weight additionally decides whom they can

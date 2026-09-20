@@ -49,7 +49,7 @@ namespace primebds::commands {
     static bool cmd_rank(PrimeBDS &plugin, endstone::CommandSender &sender,
                          const std::vector<std::string> &args) {
         const bool console = hierarchy::isConsole(plugin, sender);
-        const bool full = console || (hierarchy::isOwner(plugin, sender) && sender.hasPermission("primebds.command.rank"));
+        const bool full = console || (hierarchy::isAdministrator(plugin, sender) && sender.hasPermission("primebds.command.rank"));
         const bool set_only = console || sender.hasPermission("primebds.command.rank.set");
         if (!config::ConfigManager::instance().isCommandEnabled("rank")) {
             sender.sendMessage("The rank command is disabled."); return false;
@@ -157,8 +157,10 @@ namespace primebds::commands {
                     }
                 }
             }
+            const bool changed = hierarchy::lower(hierarchy::playerRank(plugin, target->getName()).name) != hierarchy::lower(key);
             plugin.db->setUserRank(target->getXuid(), key);
             plugin.reloadCustomPerms(*target);
+            if (changed) plugin.reconcilePlayerState(*target);
             sender.sendMessage("\u00a7e" + player_name + " \u00a7arank set to \u00a7e" + key);
             return true;
         }

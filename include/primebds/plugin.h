@@ -50,6 +50,7 @@ namespace primebds {
 
         // Re-apply custom permissions for a player
         void reloadCustomPerms(endstone::Player &player);
+        void reconcilePlayerState(endstone::Player &player);
 
         // Check for stale sessions from unclean shutdown
         void checkForInactiveSessions();

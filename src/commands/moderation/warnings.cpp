@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "primebds/utils/hierarchy.h"
 /// @file warnings.cpp
 /// List or delete warnings for a player!
 
@@ -18,19 +19,26 @@ namespace primebds::commands {
 
     REGISTER_COMMAND(warnings, "List or delete warnings for a player!", cmd_warnings,
                      info.usages = {
-                         "/warnings <player: player> [page: int]",
-                         "/warnings <player: player> (delete|clear)<action: warn_action> <id: int>"};
-                     info.permissions = {"primebds.command.warnings"};);
+                         "/warnings [player: string] [page: int]",
+                         "/warnings <player: string> (delete|clear)<action: warn_action> [id: int]"};
+                     info.permissions = {"primebds.command.warnings", "primebds.command.warnings.self"};);
 
     /// List or delete warnings for a player!
     static bool cmd_warnings(PrimeBDS &plugin, endstone::CommandSender &sender,
                              const std::vector<std::string> &args) {
-        if (args.empty()) {
-            sender.sendMessage("\u00a7cUsage: /warnings <player> [page]");
+        auto *self = sender.asPlayer();
+        if (args.empty() && !self) { sender.sendMessage("Usage: warnings <player> [page]"); return false; }
+        const std::string target_name = args.empty() ? self->getName() : args[0];
+        const bool own = self && hierarchy::lower(self->getName()) == hierarchy::lower(target_name);
+        const bool editing = args.size() >= 2 && (args[1] == "delete" || args[1] == "clear");
+        const bool admin = hierarchy::isAdministrator(plugin, sender);
+        const bool staff = sender.hasPermission("primebds.command.warnings");
+        if (!hierarchy::canAccessWarnings(admin, own, editing,
+                sender.hasPermission("primebds.command.warnings.self"), staff,
+                hierarchy::mayTarget(plugin, sender, target_name, false))) {
+            sender.sendMessage("You may only read your own warnings, or moderate strictly lower ranks.");
             return false;
         }
-
-        std::string target_name = args[0];
         auto user = plugin.db->getUserByName(target_name);
         if (!user) {
             sender.sendMessage("\u00a7cPlayer not found");
@@ -76,7 +84,8 @@ namespace primebds::commands {
                            " \u00a77(Page " + std::to_string(page) + "/" + std::to_string(total_pages) + "):");
         for (int i = start; i < end; ++i) {
             auto &w = warnings[i];
-            std::string expires = utils::formatTimeRemaining(w.warn_time);
+            std::string expires = w.expires_at < 0 ? "Legacy expiry unknown" :
+                w.expires_at == 0 ? "Permanent" : utils::formatTimeRemaining(w.expires_at);
             sender.sendMessage("\u00a78[\u00a77" + std::to_string(w.id) + "\u00a78] \u00a7f\"" +
                                w.warn_reason + "\" \u00a77- \u00a7e" + w.added_by +
                                " \u00a78[\u00a7e" + expires + "\u00a78]");

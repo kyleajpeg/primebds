@@ -7,7 +7,7 @@ namespace primebds::hierarchy {
 Rank rankOf(const std::string &name);
 Rank playerRank(PrimeBDS &plugin, const std::string &name);
 bool isConsole(PrimeBDS &plugin, endstone::CommandSender &sender);
-bool isOwner(PrimeBDS &plugin, endstone::CommandSender &sender);
+bool isAdministrator(PrimeBDS &plugin, endstone::CommandSender &sender);
 bool mayTarget(PrimeBDS &plugin, endstone::CommandSender &sender,
                const std::string &target, bool allow_self = true);
 bool requireTarget(PrimeBDS &plugin, endstone::CommandSender &sender,
@@ -20,6 +20,7 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
                             const std::string &name, const std::vector<std::string> &args);
 void socialSpy(PrimeBDS &plugin, endstone::Player &sender, const std::string &target,
                const std::string &message);
+void commandSpy(PrimeBDS &plugin, endstone::Player &sender, const std::string &command);
 void moderationLog(PrimeBDS &plugin, endstone::CommandSender &sender,
                    const std::string &target, const std::string &message);
 } // namespace primebds::hierarchy

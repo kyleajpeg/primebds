@@ -140,7 +140,7 @@ namespace primebds::commands {
             auto player_name = player.getName();
             form.show(player, [keys, module_key, sub_key, player_name, &plugin](auto result) {
                 auto *current = plugin.getServer().getPlayer(player_name);
-                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                if (!current || !hierarchy::isAdministrator(plugin, *current) ||
                     !current->hasPermission("primebds.command.primebds")) return;
                 if (!result.has_value())
                     return;
@@ -188,7 +188,7 @@ namespace primebds::commands {
             auto player_name = player.getName();
             form.show(player, [keys, module_key, player_name, &plugin](auto result) {
                 auto *current = plugin.getServer().getPlayer(player_name);
-                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                if (!current || !hierarchy::isAdministrator(plugin, *current) ||
                     !current->hasPermission("primebds.command.primebds")) return;
                 if (!result.has_value())
                     return;
@@ -236,7 +236,7 @@ namespace primebds::commands {
             auto player_name = player.getName();
             form.show(player, [&plugin, module_name, sub_keys, has_primitives, player_name](auto selection) {
                 auto *current = plugin.getServer().getPlayer(player_name);
-                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                if (!current || !hierarchy::isAdministrator(plugin, *current) ||
                     !current->hasPermission("primebds.command.primebds")) return;
                 if (!selection.has_value())
                     return;
@@ -278,7 +278,7 @@ namespace primebds::commands {
             auto player_name = player.getName();
             form.show(player, [cmd_names, player_name, &plugin](auto result) {
                 auto *current = plugin.getServer().getPlayer(player_name);
-                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                if (!current || !hierarchy::isAdministrator(plugin, *current) ||
                     !current->hasPermission("primebds.command.primebds")) return;
                 if (!result.has_value())
                     return;
@@ -312,7 +312,7 @@ namespace primebds::commands {
             auto player_name = player.getName();
             form.show(player, [filename, player_name, &plugin](auto result) {
                 auto *current = plugin.getServer().getPlayer(player_name);
-                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                if (!current || !hierarchy::isAdministrator(plugin, *current) ||
                     !current->hasPermission("primebds.command.primebds")) return;
                 if (!result.has_value())
                     return;
@@ -356,7 +356,7 @@ namespace primebds::commands {
             auto player_name = player.getName();
             form.show(player, [&plugin, categories, player_name](auto selection) {
                 auto *current = plugin.getServer().getPlayer(player_name);
-                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                if (!current || !hierarchy::isAdministrator(plugin, *current) ||
                     !current->hasPermission("primebds.command.primebds")) return;
                 if (!selection.has_value())
                     return;
@@ -407,7 +407,7 @@ namespace primebds::commands {
             auto player_name = player.getName();
             form.show(player, [&plugin, names, player_name](auto selection) {
                 auto *current = plugin.getServer().getPlayer(player_name);
-                if (!current || !hierarchy::isOwner(plugin, *current) ||
+                if (!current || !hierarchy::isAdministrator(plugin, *current) ||
                     !current->hasPermission("primebds.command.primebds")) return;
                 if (!selection.has_value()) return;
                 int idx = selection.value();

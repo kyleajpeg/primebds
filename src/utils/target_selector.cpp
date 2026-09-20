@@ -147,7 +147,13 @@ namespace primebds::utils {
 
         if (!selector.empty() && selector[0] != '@') {
             // Plain name lookup
-            auto lower = toLower(selector);
+            auto literal = selector;
+            if (literal.size() >= 2 && literal.front() == '"' && literal.back() == '"') {
+                auto tokens = hierarchy::tokenize(literal);
+                if (!tokens || tokens->size() != 1) return {};
+                literal = tokens->front();
+            }
+            auto lower = toLower(literal);
             for (auto *p : players) {
                 if (toLower(p->getName()) == lower)
                     return {p};

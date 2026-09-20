@@ -75,6 +75,7 @@ namespace primebds::db {
         std::string name;
         std::string warn_reason;
         int64_t warn_time = 0;
+        int64_t expires_at = -1; // -1 legacy unknown; 0 permanent
         std::string added_by;
     };
 

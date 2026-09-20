@@ -473,9 +473,9 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
 
     cmd(b, "warnings").description("List or delete warnings for a player!")
         .usages(
-            "/warnings <player: player> [page: int]",
-            "/warnings <player: player> (delete|clear)<action: warn_action> <id: int>")
-        .permissions("primebds.command.warnings");
+            "/warnings [player: string] [page: int]",
+            "/warnings <player: string> (delete|clear)<action: warn_action> [id: int]")
+        .permissions("primebds.command.warnings", "primebds.command.warnings.self");
 
     // -----------------------------------------------------------------------
     // MOVEMENT

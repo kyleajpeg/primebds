@@ -27,10 +27,9 @@ private:
 
 inline std::vector<std::string> speedUsages() {
     return {
-        "/speed [value: float]",
-        "/speed (flyspeed|walkspeed)<mode: speed_mode> <value: float> [player: player]",
-        "/speed (reset)<action: speed_action> [type_or_player: string] [player: player]",
-        "/speed (flyspeed|walkspeed)<mode: speed_mode> (reset)<action: speed_action> [player: player]"};
+        "/speed [value: float] [player: string]",
+        "/speed (flyspeed|walkspeed)<mode: speed_mode> <value_or_reset: string> [player: string]",
+        "/speed (reset)<action: speed_action> [type_or_player: string] [player: string]"};
 }
 inline std::vector<std::string> nicknameUsages() {
     return {"/nickname [name: string] [player: player]"};
@@ -70,7 +69,10 @@ inline std::optional<SpeedRequest> parseSpeed(const std::vector<std::string> &ar
         return result;
     }
     std::string value;
-    if (args.size() == 1) value = args[0];
+    if (args.size() == 1 || (args.size() == 2 && !isSpeedMode(args[0]))) {
+        value = args[0];
+        if (args.size() == 2) result.target = args[1];
+    }
     else {
         if (!isSpeedMode(args[0])) return std::nullopt;
         result.mode = speedMode(args[0]);

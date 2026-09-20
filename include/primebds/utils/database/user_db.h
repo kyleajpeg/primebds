@@ -45,7 +45,7 @@ namespace primebds::db {
 
         // Warning operations
         void addWarning(const std::string &xuid, const std::string &name,
-                        const std::string &reason, const std::string &added_by);
+                        const std::string &reason, const std::string &added_by, int64_t expires_at = 0);
         void removeWarning(int id);
         std::vector<Warn> getWarnings(const std::string &xuid);
         int getWarningCount(const std::string &xuid);
@@ -76,6 +76,7 @@ namespace primebds::db {
         std::optional<User> getUserByXuid(const std::string &xuid);
         std::map<std::string, std::string> getInternalPermissions(const std::string &xuid);
         void setUserRank(const std::string &xuid, const std::string &rank);
+        void resetUnavailableSettings(const std::string &xuid, const std::map<std::string, bool> &permissions);
 
         // Alt detection
         std::vector<Alt> findAlts(const std::string &ip, const std::string &device_id,

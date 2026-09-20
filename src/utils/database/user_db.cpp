@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 #include <ctime>
+#include <algorithm>
 
 namespace primebds::db {
 
@@ -56,6 +57,10 @@ namespace primebds::db {
                                  {"warn_reason", "TEXT"},
                                  {"warn_time", "INTEGER"},
                                  {"added_by", "TEXT"}});
+
+        const auto warning_columns = getColumnNames("warnings");
+        if (std::find(warning_columns.begin(), warning_columns.end(), "expires_at") == warning_columns.end())
+            execute("ALTER TABLE warnings ADD COLUMN expires_at INTEGER NOT NULL DEFAULT -1");
 
         createTable("notes", {{"id", "INTEGER PRIMARY KEY AUTOINCREMENT"},
                               {"xuid", "TEXT"},
@@ -359,11 +364,11 @@ namespace primebds::db {
     // --- Warnings ---
 
     void UserDB::addWarning(const std::string &xuid, const std::string &name,
-                            const std::string &reason, const std::string &added_by) {
+                            const std::string &reason, const std::string &added_by, int64_t expires_at) {
         auto now = std::to_string(std::time(nullptr));
         execute(
-            "INSERT INTO warnings (xuid, name, warn_reason, warn_time, added_by) VALUES (?, ?, ?, ?, ?)",
-            {xuid, name, reason, now, added_by});
+            "INSERT INTO warnings (xuid, name, warn_reason, warn_time, added_by, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+            {xuid, name, reason, now, added_by, std::to_string(expires_at)});
     }
 
     void UserDB::removeWarning(int id) {
@@ -380,6 +385,7 @@ namespace primebds::db {
             w.name = r["name"];
             w.warn_reason = r["warn_reason"];
             w.warn_time = std::stoll(r["warn_time"]);
+            w.expires_at = std::stoll(r["expires_at"]);
             w.added_by = r["added_by"];
             warns.push_back(w);
         }
@@ -653,6 +659,22 @@ namespace primebds::db {
         } catch (...) {
         }
         return result;
+    }
+
+    void UserDB::resetUnavailableSettings(const std::string &xuid, const std::map<std::string, bool> &permissions) {
+        const auto has = [&](const std::string &node) {
+            const auto found = permissions.find("primebds.command." + node);
+            return found != permissions.end() && found->second ? "1" : "0";
+        };
+        execute("UPDATE users SET "
+            "enabled_mt = CASE WHEN ? THEN enabled_mt ELSE 1 END, "
+            "enabled_ss = CASE WHEN ? THEN enabled_ss ELSE 0 END, "
+            "enabled_ms = CASE WHEN ? THEN enabled_ms ELSE 0 END, "
+            "enabled_as = CASE WHEN ? THEN enabled_as ELSE 0 END, "
+            "enabled_sc = CASE WHEN ? THEN enabled_sc ELSE 0 END, "
+            "is_afk = CASE WHEN ? THEN is_afk ELSE 0 END WHERE xuid = ?",
+            {has("msgtoggle"), has("socialspy"), has("modspy"), has("altspy"), has("staffchat"), has("afk"), xuid});
+        invalidateUserCache(xuid);
     }
 
     void UserDB::setUserRank(const std::string &xuid, const std::string &rank) {

@@ -10,6 +10,8 @@
 #include <ctime>
 #include <cstdlib>
 #include <map>
+#include <charconv>
+#include <limits>
 
 namespace primebds::commands {
 
@@ -38,8 +40,7 @@ namespace primebds::commands {
             return false;
         }
 
-        // Default permanent (200 years)
-        int64_t duration_seconds = 200LL * 365 * 86400;
+        int64_t duration_seconds = 0; // Permanent unless a duration is supplied.
         size_t reason_end = args.size();
 
         // Check if last two args are duration + unit
@@ -56,7 +57,13 @@ namespace primebds::commands {
             if (is_num) {
                 auto it = warn_time_units.find(maybe_unit);
                 if (it != warn_time_units.end()) {
-                    duration_seconds = std::atol(maybe_num.c_str()) * it->second;
+                    int64_t duration = 0;
+                    auto [end, error] = std::from_chars(maybe_num.data(), maybe_num.data() + maybe_num.size(), duration);
+                    if (error != std::errc{} || end != maybe_num.data() + maybe_num.size() || duration <= 0 ||
+                        duration > (std::numeric_limits<int64_t>::max() - std::time(nullptr)) / it->second) {
+                        sender.sendMessage("Warning duration must be a positive, representable integer."); return false;
+                    }
+                    duration_seconds = duration * it->second;
                     reason_end = args.size() - 2;
                 }
             }
@@ -73,9 +80,24 @@ namespace primebds::commands {
             return false;
         }
 
-        plugin.db->addWarning(user->xuid, user->name, reason, sender.getName());
+        const int64_t expires_at = duration_seconds ? std::time(nullptr) + duration_seconds : 0;
+        plugin.db->addWarning(user->xuid, user->name, reason, sender.getName(), expires_at);
+        if (auto *target = plugin.getServer().getPlayer(user->name)) {
+            const std::string notice = "You received a warning from " + sender.getName() + ": " + reason +
+                "\nUse /warnings to view your warning history.";
+            target->sendMessage(notice);
+            endstone::ActionForm form;
+            form.setTitle("Warning");
+            form.setContent(notice);
+            form.addButton("View my warnings");
+            form.addButton("Close");
+            form.setOnSubmit([&plugin](endstone::Player *p, int selection) {
+                if (p && selection == 0) (void)plugin.getServer().dispatchCommand(*p, "warnings");
+            });
+            target->sendForm(std::move(form));
+        }
 
-        std::string expiration_str = utils::formatTimeRemaining(std::time(nullptr) + duration_seconds);
+        std::string expiration_str = (expires_at ? utils::formatTimeRemaining(expires_at) : "Never (permanent)");
         sender.sendMessage("\u00a76Player \u00a7e" + target_name + " \u00a76was warned for \u00a7e\"" +
                            reason + "\" \u00a76which expires \u00a7e" + expiration_str);
         hierarchy::moderationLog(plugin, sender, target_name, "\u00a76Player \u00a7e" + target_name + " \u00a76was warned by \u00a7e" + sender.getName() + " \u00a76for \u00a7e\"" + reason + "\"");

@@ -4,6 +4,8 @@
 #include "primebds/utils/target_selector.h"
 #include "primebds/utils/item_slot.h"
 #include "primebds/utils/logging.h"
+#include "primebds/utils/spy_policy.h"
+#include "primebds/utils/command_audit.h"
 #include <set>
 
 namespace primebds::hierarchy {
@@ -25,12 +27,12 @@ Rank playerRank(PrimeBDS &plugin, const std::string &name) {
 bool isConsole(PrimeBDS &plugin, endstone::CommandSender &sender) {
     return &sender == &plugin.getServer().getCommandSender();
 }
-bool isOwner(PrimeBDS &plugin, endstone::CommandSender &sender) {
+bool isAdministrator(PrimeBDS &plugin, endstone::CommandSender &sender) {
     if (isConsole(plugin, sender)) return true;
     auto *player = sender.asPlayer();
     if (!player) return false;
     auto rank = playerRank(plugin, player->getName());
-    return rank.weight.has_value() && lower(rank.name) == "owner";
+    return privileged(rank);
 }
 bool mayTarget(PrimeBDS &plugin, endstone::CommandSender &sender, const std::string &target, bool allow_self) {
     if (isConsole(plugin, sender)) return true;
@@ -51,14 +53,14 @@ bool mayObserve(PrimeBDS &plugin, endstone::Player &viewer, const std::vector<st
 }
 bool authorizePluginCommand(PrimeBDS &plugin, endstone::CommandSender &sender,
                             const std::string &raw_name, const std::vector<std::string> &args) {
-    if (isConsole(plugin, sender)) return true;
+    if (isAdministrator(plugin, sender)) return true;
     if (!sender.asPlayer()) return false;
     auto name = canonicalName(raw_name);
     auto *registration = CommandRegistry::instance().find(name);
     if (registration) name = registration->info.name;
     auto policy = commandPolicy(name);
     if (policy == CommandPolicy::Owner || policy == CommandPolicy::Permissions) {
-        if (!isOwner(plugin, sender)) {
+        if (!isAdministrator(plugin, sender)) {
             sender.sendMessage("This administration command is reserved for Owner or the panel console.");
             return false;
         }
@@ -70,6 +72,7 @@ bool authorizePluginCommand(PrimeBDS &plugin, endstone::CommandSender &sender,
         sender.sendMessage("This command needs the panel console: its broad effects cannot be limited to lower ranks.");
         return false;
     }
+    if (name == "warnings") return true; // Handler separates self-read from moderation.
     if (policy == CommandPolicy::Rank) return true; // Checked again inside rank.cpp, including direct callers.
     if (policy == CommandPolicy::Named || policy == CommandPolicy::Moderation) {
         if (args.empty()) return true; // No side effects; handler prints usage.
@@ -84,6 +87,7 @@ bool authorizePluginCommand(PrimeBDS &plugin, endstone::CommandSender &sender,
 }
 bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
                             const std::string &raw_name, const std::vector<std::string> &args) {
+    if (isAdministrator(plugin, sender)) return true;
     const auto name = canonicalName(raw_name);
     // Communication is not an administrative action. Spy recipients have their own strict gate.
     static const std::set<std::string> ordinary = {"help", "list", "me", "tell", "w", "whisper", "msg", "say",
@@ -103,7 +107,7 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
         "toggledownfall", "daylock", "fill", "clone", "setblock", "structure", "place", "summon", "locate",
         "setworldspawn", "mobevent", "tickingarea", "setmaxplayers", "scoreboard"};
     if (owner_world.contains(name)) {
-        if (isOwner(plugin, sender) && name != "scoreboard") return true;
+        if (isAdministrator(plugin, sender) && name != "scoreboard") return true;
         sender.sendMessage("Use Owner/panel for world administration; scoreboard targeting requires the panel.");
         return false;
     }
@@ -145,12 +149,39 @@ void socialSpy(PrimeBDS &plugin, endstone::Player &sender, const std::string &ta
 void moderationLog(PrimeBDS &plugin, endstone::CommandSender &sender,
                    const std::string &target, const std::string &message) {
     utils::discordRelay(message, "mod");
-    // Console-origin records are never broadcast to spies: there is no lower-ranked actor.
-    if (!sender.asPlayer()) return;
     for (auto *viewer : plugin.getServer().getOnlinePlayers()) {
         auto state = plugin.db->getOnlineUser(viewer->getXuid());
         if (state && state->enabled_ms && viewer->hasPermission("primebds.command.modspy") &&
-            mayObserve(plugin, *viewer, {sender.getName(), target})) viewer->sendMessage(message);
+            mayObserve(plugin, *viewer, {sender.getName(), target})) viewer->sendMessage("[ModSpy action] " + message);
+    }
+}
+
+void commandSpy(PrimeBDS &plugin, endstone::Player &sender, const std::string &command) {
+    const auto tokens = tokenize(command);
+    std::optional<std::vector<std::string>> targets;
+    if (tokens && !tokens->empty()) {
+        auto name = canonicalName(tokens->front());
+        if (const auto *reg = CommandRegistry::instance().find(name)) name = reg->info.name;
+        const auto actor = plugin.db->getOnlineUser(sender.getXuid());
+        targets = spyTargets(name, {tokens->begin()+1, tokens->end()}, actor ? actor->last_messaged : "");
+        if (targets) {
+            for (auto &target : *targets) {
+                if (target == "@s") target = sender.getName();
+                if (target.empty() || target.front() == '@') { targets.reset(); break; }
+            }
+        }
+    }
+    for (auto *viewer : plugin.getServer().getOnlinePlayers()) {
+        if (viewer == &sender) continue;
+        const auto state = plugin.db->getOnlineUser(viewer->getXuid());
+        if (!state || !state->enabled_ms || !viewer->hasPermission("primebds.command.modspy")) continue;
+        bool visible = isAdministrator(plugin, *viewer);
+        if (!visible && targets) {
+            auto participants = *targets;
+            participants.push_back(sender.getName());
+            visible = mayObserve(plugin, *viewer, participants);
+        }
+        if (visible) viewer->sendMessage("[ModSpy attempt] " + utils::quoteAuditText(sender.getName()) + " " + utils::quoteAuditText(command));
     }
 }
 } // namespace primebds::hierarchy

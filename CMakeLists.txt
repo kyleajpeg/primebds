@@ -78,6 +78,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 option(PRIMEBDS_BUILD_TESTS "Build permission, audit and player default regression tests" ON)
 if(PRIMEBDS_BUILD_TESTS)
     enable_testing()
+    add_executable(player_state_test tests/player_state_test.cpp
+        src/utils/database/user_db.cpp src/utils/database/database_manager.cpp)
+    target_include_directories(player_state_test PRIVATE include)
+    target_link_libraries(player_state_test PRIVATE nlohmann_json::nlohmann_json sqlite3)
+    add_test(NAME player_state COMMAND player_state_test)
     add_executable(hierarchy_policy_test tests/hierarchy_policy_test.cpp)
     target_include_directories(hierarchy_policy_test PRIVATE include)
     add_test(NAME hierarchy_policy COMMAND hierarchy_policy_test)

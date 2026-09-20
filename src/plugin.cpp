@@ -7,6 +7,8 @@
 #include "primebds/utils/permissions/permission_manager.h"
 #include "primebds/utils/logging.h"
 #include "primebds/utils/command_audit.h"
+#include "primebds/utils/hierarchy.h"
+#include "primebds/utils/player_state_policy.h"
 
 #include "primebds/commands/command_metadata.h"
 
@@ -125,6 +127,34 @@ namespace primebds {
         return false;
     }
 
+    void PrimeBDS::reconcilePlayerState(endstone::Player &player) {
+        const auto has = [&](const std::string &node) { return player.hasPermission("primebds.command." + node); };
+        std::map<std::string, bool> preferences;
+        for (const auto *node : {"msgtoggle", "socialspy", "modspy", "altspy", "staffchat", "afk"})
+            preferences["primebds.command." + std::string(node)] = has(node);
+        db->resetUnavailableSettings(player.getXuid(), preferences);
+        if (!has("god") && !has("god.other")) isgod.set(player, false);
+        if (!has("afk")) afk_cache.erase(player.getXuid());
+        for (auto *intervals : {&monitor_intervals, &blockscan_intervals}) {
+            const auto node = intervals == &monitor_intervals ? "monitor" : "blockscan";
+            if (has(node)) continue;
+            auto found = intervals->find(player.getName());
+            if (found != intervals->end()) {
+                getServer().getScheduler().cancelTask(found->second);
+                intervals->erase(found);
+            }
+        }
+        const auto mode = player.getGameMode();
+        if (!utils::mayKeepGameMode(static_cast<int>(mode), [&](const std::string &node) {
+                return player.hasPermission(node);
+            })) player.setGameMode(endstone::GameMode::Survival);
+        const auto current_mode = player.getGameMode();
+        if (!has("fly") && !has("fly.other") && current_mode != endstone::GameMode::Creative &&
+            current_mode != endstone::GameMode::Spectator) player.setAllowFlight(false);
+        if (!has("speed")) { player.setWalkSpeed(0.1f); player.setFlySpeed(0.05f); }
+        if (!has("nickname") && !has("nickname.other")) player.setNameTag(player.getName());
+    }
+
     void PrimeBDS::reloadCustomPerms(endstone::Player &player) {
         auto &pm = permissions::PermissionManager::instance();
         auto user = db->getOnlineUser(player.getXuid());
@@ -241,6 +271,7 @@ namespace primebds {
 
         player.updateCommands();
         player.recalculatePermissions();
+        if (hierarchy::lower(internal_rank) != hierarchy::lower(user->internal_rank)) reconcilePlayerState(player);
         pm.clearPrefixSuffixCache();
         pm.invalidatePermCache(player.getXuid());
     }
@@ -314,6 +345,7 @@ namespace primebds {
 
     void EventListener::onPlayerCommandAudit(endstone::PlayerCommandEvent &event) {
         plugin_.getLogger().info("{}", utils::formatCommandAttempt(event.getPlayer().getName(), event.getCommand()));
+        hierarchy::commandSpy(plugin_, event.getPlayer(), event.getCommand());
     }
 
     void EventListener::onPlayerCommand(endstone::PlayerCommandEvent &event) {
@@ -338,7 +370,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.6", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.7", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

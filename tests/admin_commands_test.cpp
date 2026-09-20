@@ -35,6 +35,13 @@ int main() {
         check(fly && fly->reset && fly->mode == Mode::Fly && fly->target == "Alice", "Reset-first mode");
         const auto value = parseSpeed({"walkspeed", "0.1", "Alice"});
         check(value && !value->reset && value->value == 0.1f, "Explicit speed value");
+        const auto shorthand = parseSpeed({"2","Il Gallon lI"});
+        check(shorthand && shorthand->target == "Il Gallon lI" && shorthand->value == 2, "Targeted numeric shorthand with spaced gamertag");
+        const auto targetedFly = parseSpeed({"flyspeed","2","Il Gallon lI"});
+        check(targetedFly && targetedFly->mode == Mode::Fly && targetedFly->target == "Il Gallon lI", "Explicit targeted fly speed");
+        int modeEnums = 0;
+        for (const auto &usage : speedUsages()) if (usage.find("speed_mode") != std::string::npos) ++modeEnums;
+        check(modeEnums == 1, "No duplicate speed mode autocomplete enum");
         check(parseSpeed({"0"}).has_value(), "Zero speed is valid");
         for (const auto &bad : {"nan", "inf", "-1", "1e100", "1garbage", "", "resetty"})
             check(!parseSpeed({bad}), "Invalid speed rejected");

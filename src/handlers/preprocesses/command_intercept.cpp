@@ -99,7 +99,7 @@ namespace primebds::handlers::preprocesses {
         }
 
         // Exemption check for moderation commands
-        if (MODERATION_COMMANDS.count(cmd) && args.size() >= 2 && args[1].find('@') == std::string::npos) {
+        if (!hierarchy::isAdministrator(plugin, player) && MODERATION_COMMANDS.count(cmd) && args.size() >= 2 && args[1].find('@') == std::string::npos) {
             auto target = plugin.db->getUserByName(args[1]);
             if (target.has_value()) {
                 // Map command to its exemption permission
@@ -168,7 +168,7 @@ namespace primebds::handlers::preprocesses {
                 if (!hierarchy::requireTarget(plugin, player, target_player->getName(), false)) return;
 
                 auto target = plugin.db->getOnlineUser(target_player->getXuid());
-                if (target.has_value() && target_player->hasPermission("primebds.exempt.kick")) {
+                if (!hierarchy::isAdministrator(plugin, player) && target.has_value() && target_player->hasPermission("primebds.exempt.kick")) {
                     player.sendMessage("\u00a76Player \u00a7e" + target->name +
                                        " \u00a76is exempt from \u00a7ekick");
                     continue;
