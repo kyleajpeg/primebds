@@ -12,7 +12,7 @@ namespace primebds::commands {
                           const std::vector<std::string> &args) {
         const auto request = utils::parseSpeed(args);
         if (!request) {
-            sender.sendMessage("Usage: /speed <nonnegative value> [player] | /speed <walkspeed|flyspeed> <value|reset> [player] | /speed reset [walkspeed|flyspeed|player] [player]");
+            sender.sendMessage("Usage: /speed <nonnegative value> [player] | /speed <walkspeed|flyspeed> <value> [player] | /speed reset [walkspeed|flyspeed|player] [player]");
             return false;
         }
         auto *self = sender.asPlayer();

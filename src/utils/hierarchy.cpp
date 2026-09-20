@@ -72,7 +72,7 @@ bool authorizePluginCommand(PrimeBDS &plugin, endstone::CommandSender &sender,
         sender.sendMessage("This command needs the panel console: its broad effects cannot be limited to lower ranks.");
         return false;
     }
-    if (name == "warnings") return true; // Handler separates self-read from moderation.
+    if (name == "staffwarnings") return true; // Handler separates self-read from moderation.
     if (policy == CommandPolicy::Rank) return true; // Checked again inside rank.cpp, including direct callers.
     if (policy == CommandPolicy::Named || policy == CommandPolicy::Moderation) {
         if (args.empty()) return true; // No side effects; handler prints usage.

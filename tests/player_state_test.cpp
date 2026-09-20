@@ -62,7 +62,39 @@ int main() {
             check(database.getWarnings("different-member").empty(), "Warning histories are scoped to XUID");
         }
         {
+            db::UserDB database(path);
+            database.saveUser("offline","offline-uuid","Offline Player",1,"os","device",1,"version");
+            database.setUserRank("offline","Owner");
+            database.updateUser("offline","enabled_ss","1");
+            database.updateUser("offline","enabled_ms","1");
+            check(database.getUserByName("OFFLINE PLAYER")->xuid == "offline", "Offline name lookup ignores case and preserves XUID");
+            std::map<std::string,bool> retained;
+            for (const auto *node : {"gmc","gma","gmsp","fly","speed","nickname","god","socialspy"})
+                retained["primebds.command." + std::string(node)] = true;
+            database.assignRank("offline","Admin",retained);
+            auto user=database.getUserByName("offline player");
+            check(user && user->internal_rank == "Admin" && user->enabled_ss && !user->enabled_ms,
+                "Offline assignment updates cached identity and only revoked preferences");
+            check(database.pendingStateReset("offline") == 0, "Retained gameplay permissions do not enqueue resets");
+            database.assignRank("offline","Default",{});
+            check(database.pendingStateReset("offline") & utils::SpeedReset, "Offline demotion queues speed reset");
+            check(!database.getOnlineUser("offline")->enabled_ss, "Offline demotion clears spies immediately");
+            const auto pending=database.pendingStateReset("offline");
+            database.assignRank("offline","Owner",retained);
+            check(database.pendingStateReset("offline") == pending && !database.getOnlineUser("offline")->enabled_ss,
+                "Offline re-promotion cannot resurrect preferences or discard pending gameplay revocations");
+            database.saveUser("offline","offline-uuid","Renamed Player",1,"os","device",1,"version");
+            check(database.getOnlineUser("offline")->internal_rank == "Owner" && database.pendingStateReset("offline") == pending,
+                "Returning-player save preserves offline rank changes and pending revocations");
+            check(!database.getUserByName("Never Joined"), "Unknown players are not fabricated");
+        }
+        {
             db::UserDB reopened(path);
+            const auto pending=reopened.pendingStateReset("offline");
+            check((pending & utils::SpeedReset) && utils::modeWasRevoked(1,pending), "Offline gameplay revocations survive restart");
+            check(!reopened.getOnlineUser("offline")->enabled_ss, "Offline spy revocation survives restart");
+            reopened.clearPendingStateReset("offline");
+            check(reopened.pendingStateReset("offline") == 0, "Acknowledged reconnect reset is consumed only once");
             check(!reopened.getOnlineUser("one")->enabled_ss, "Revocation survives restart");
             check(reopened.getWarnings("one").size()==3, "Warnings survive repeated migration/startup");
         }

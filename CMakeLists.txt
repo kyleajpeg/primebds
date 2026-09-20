@@ -78,6 +78,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 option(PRIMEBDS_BUILD_TESTS "Build permission, audit and player default regression tests" ON)
 if(PRIMEBDS_BUILD_TESTS)
     enable_testing()
+    add_executable(command_syntax_test tests/command_syntax_test.cpp
+        ${endstone_SOURCE_DIR}/src/endstone/core/command/command_lexer.cpp
+        ${endstone_SOURCE_DIR}/src/endstone/core/command/command_usage_parser.cpp)
+    target_include_directories(command_syntax_test PRIVATE include ${endstone_SOURCE_DIR}/src)
+    target_link_libraries(command_syntax_test PRIVATE endstone::endstone)
+    add_test(NAME command_syntax COMMAND command_syntax_test)
+    add_executable(warning_command_test tests/warning_command_test.cpp)
+    target_include_directories(warning_command_test PRIVATE include)
+    add_test(NAME warning_command COMMAND warning_command_test)
     add_executable(player_state_test tests/player_state_test.cpp
         src/utils/database/user_db.cpp src/utils/database/database_manager.cpp)
     target_include_directories(player_state_test PRIVATE include)

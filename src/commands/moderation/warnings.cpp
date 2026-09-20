@@ -17,17 +17,33 @@ namespace primebds::commands {
     static bool cmd_warnings(PrimeBDS &, endstone::CommandSender &,
                         const std::vector<std::string> &);
 
-    REGISTER_COMMAND(warnings, "List or delete warnings for a player!", cmd_warnings,
+    static bool cmd_my_warnings(PrimeBDS &plugin, endstone::CommandSender &sender,
+                                const std::vector<std::string> &args) {
+        auto *player = sender.asPlayer();
+        if (!player) { sender.sendMessage("Use /staffwarnings <player> [page] from the console."); return false; }
+        int page = 1;
+        if (args.size() > 1 || (!args.empty() && !utils::parsePage(args[0], page))) {
+            sender.sendMessage("Usage: /warnings [page]"); return false;
+        }
+        std::vector<std::string> own{player->getName()};
+        own.insert(own.end(), args.begin(), args.end());
+        return cmd_warnings(plugin, sender, own);
+    }
+    REGISTER_COMMAND(warnings, "Read your own warning history", cmd_my_warnings,
+                     info.usages = {"/warnings [page: int]"};
+                     info.permissions = {"primebds.command.warnings.self", "primebds.command.warnings"};);
+    REGISTER_COMMAND(staffwarnings, "View or manage a player's warnings", cmd_warnings,
                      info.usages = {
-                         "/warnings [player: string] [page: int]",
-                         "/warnings <player: string> (delete|clear)<action: warn_action> [id: int]"};
-                     info.permissions = {"primebds.command.warnings", "primebds.command.warnings.self"};);
+                         "/staffwarnings <player: string> [page: int]",
+                         "/staffwarnings <player: string> (delete)<action: staffwarnings_delete> <id: int>",
+                         "/staffwarnings <player: string> (clear)<action: staffwarnings_clear>"};
+                     info.permissions = {"primebds.command.warnings"};);
 
     /// List or delete warnings for a player!
     static bool cmd_warnings(PrimeBDS &plugin, endstone::CommandSender &sender,
                              const std::vector<std::string> &args) {
         auto *self = sender.asPlayer();
-        if (args.empty() && !self) { sender.sendMessage("Usage: warnings <player> [page]"); return false; }
+        if (args.empty() && !self) { sender.sendMessage("Usage: staffwarnings <player> [page]"); return false; }
         const std::string target_name = args.empty() ? self->getName() : args[0];
         const bool own = self && hierarchy::lower(self->getName()) == hierarchy::lower(target_name);
         const bool editing = args.size() >= 2 && (args[1] == "delete" || args[1] == "clear");

@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           apt-get update -q
-          apt-get install -y -q ca-certificates wget gnupg git cmake ninja-build binutils python3
+          apt-get install -y -q ca-certificates wget gnupg git cmake ninja-build binutils python3 libboost-dev
           wget -qO /usr/share/keyrings/llvm.asc https://apt.llvm.org/llvm-snapshot.gpg.key
           printf '%s\n' 'deb [signed-by=/usr/share/keyrings/llvm.asc] https://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main' > /etc/apt/sources.list.d/llvm.list
           apt-get update -q

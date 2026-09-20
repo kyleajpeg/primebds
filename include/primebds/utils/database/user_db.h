@@ -76,6 +76,9 @@ namespace primebds::db {
         std::optional<User> getUserByXuid(const std::string &xuid);
         std::map<std::string, std::string> getInternalPermissions(const std::string &xuid);
         void setUserRank(const std::string &xuid, const std::string &rank);
+        void assignRank(const std::string &xuid, const std::string &rank, const std::map<std::string, bool> &permissions);
+        int pendingStateReset(const std::string &xuid);
+        void clearPendingStateReset(const std::string &xuid);
         void resetUnavailableSettings(const std::string &xuid, const std::map<std::string, bool> &permissions);
 
         // Alt detection

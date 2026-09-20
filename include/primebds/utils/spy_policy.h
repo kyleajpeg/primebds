@@ -36,7 +36,7 @@ inline std::optional<std::vector<std::string>> spyTargets(
         return args.empty() ? std::vector<std::string>{} : std::vector<std::string>{args[0]};
     static const std::set<std::string> self = {"afk","back","blockinfo","blockscan","bottom","cords",
         "discord","entityinfo","help","list","monitor","msgtoggle","rules","socialspy","spawn",
-        "top","modspy","altspy","version","plugins","status"};
+        "warnings","top","modspy","altspy","version","plugins","status"};
     if (self.contains(name)) return std::vector<std::string>{};
     return std::nullopt;
 }

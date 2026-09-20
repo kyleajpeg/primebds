@@ -25,3 +25,16 @@ for path in ('src/commands/message/reply.cpp','src/handlers/preprocesses/command
     assert 'hierarchy::socialSpy(' in source
     assert 'enabled_ss' not in source, 'Spy fanout must stay centralized'
 print(f'All {len(commands)} commands classified; selector, record and spy guard wiring checked.')
+
+# Personal warning help must never advertise a target or destructive action.
+self_help = metadata.split('cmd(b, "warnings")', 1)[1].split('cmd(b, "staffwarnings")', 1)[0]
+assert '/warnings [page: int]' in self_help
+assert '<player:' not in self_help and 'delete' not in self_help and 'clear' not in self_help
+staff_help = metadata.split('cmd(b, "staffwarnings")', 1)[1].split('// ---', 1)[0]
+assert '.permissions("primebds.command.warnings")' in staff_help
+assert 'primebds.command.warnings.self' not in staff_help
+rank = (root/'src/commands/server/rank.cpp').read_text(encoding='utf-8')
+assert 'hierarchy::rankOf(user->internal_rank), destination' in rank
+assert 'assignRank(user->xuid, key, plugin.savedPermissions(user->xuid, key))' in rank
+assert 'not found online' not in rank
+print('Personal warning help, staff permission, and offline rank guard wiring checked.')

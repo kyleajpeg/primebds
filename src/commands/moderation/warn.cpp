@@ -1,4 +1,5 @@
 #include "primebds/utils/hierarchy.h"
+#include "primebds/utils/warning_command.h"
 /// @file warn.cpp
 /// Warn a player that they are breaking a rule!
 
@@ -19,68 +20,22 @@ namespace primebds::commands {
                         const std::vector<std::string> &);
 
     REGISTER_COMMAND(warn, "Warn a player that they are breaking a rule!", cmd_warn,
-                     info.usages = {"/warn <player: player> <reason: string> [duration: int] [unit: string]"};
+                     info.usages = utils::warningUsages();
                      info.permissions = {"primebds.command.warn"};);
-
-    static const std::map<std::string, int64_t> warn_time_units = {
-        {"second", 1}, {"minute", 60}, {"hour", 3600}, {"day", 86400}, {"week", 604800}, {"month", 2592000}, {"year", 31536000}};
 
     /// Warn a player that they are breaking a rule!
     static bool cmd_warn(PrimeBDS &plugin, endstone::CommandSender &sender,
                          const std::vector<std::string> &args) {
-        if (args.size() < 2) {
-            sender.sendMessage("\u00a7cUsage: /warn <player> <reason> [duration] [unit]");
+        const auto request = utils::parseWarning(args, std::time(nullptr));
+        if (!request) {
+            sender.sendMessage("Usage: /warn <player> <positive integer> <second(s)|minute(s)|hour(s)|day(s)|week(s)|month(s)|year(s)> <reason> OR /warn <player> permanent <reason>. Invalid durations are rejected.");
             return false;
         }
-
-        std::string target_name = args[0];
+        const auto &target_name = request->target;
+        const auto &reason = request->reason;
+        const auto expires_at = request->expires_at;
         auto user = plugin.db->getUserByName(target_name);
-        if (!user) {
-            sender.sendMessage("\u00a7cPlayer not found");
-            return false;
-        }
-
-        int64_t duration_seconds = 0; // Permanent unless a duration is supplied.
-        size_t reason_end = args.size();
-
-        // Check if last two args are duration + unit
-        if (args.size() >= 4) {
-            std::string maybe_unit = args[args.size() - 1];
-            std::string maybe_num = args[args.size() - 2];
-            bool is_num = !maybe_num.empty();
-            for (char c : maybe_num)
-                if (!std::isdigit(c)) {
-                    is_num = false;
-                    break;
-                }
-
-            if (is_num) {
-                auto it = warn_time_units.find(maybe_unit);
-                if (it != warn_time_units.end()) {
-                    int64_t duration = 0;
-                    auto [end, error] = std::from_chars(maybe_num.data(), maybe_num.data() + maybe_num.size(), duration);
-                    if (error != std::errc{} || end != maybe_num.data() + maybe_num.size() || duration <= 0 ||
-                        duration > (std::numeric_limits<int64_t>::max() - std::time(nullptr)) / it->second) {
-                        sender.sendMessage("Warning duration must be a positive, representable integer."); return false;
-                    }
-                    duration_seconds = duration * it->second;
-                    reason_end = args.size() - 2;
-                }
-            }
-        }
-
-        std::string reason;
-        for (size_t i = 1; i < reason_end; ++i) {
-            if (i > 1)
-                reason += " ";
-            reason += args[i];
-        }
-        if (reason.empty()) {
-            sender.sendMessage("\u00a7cProvide a reason");
-            return false;
-        }
-
-        const int64_t expires_at = duration_seconds ? std::time(nullptr) + duration_seconds : 0;
+        if (!user) { sender.sendMessage("Player not found."); return false; }
         plugin.db->addWarning(user->xuid, user->name, reason, sender.getName(), expires_at);
         if (auto *target = plugin.getServer().getPlayer(user->name)) {
             const std::string notice = "You received a warning from " + sender.getName() + ": " + reason +

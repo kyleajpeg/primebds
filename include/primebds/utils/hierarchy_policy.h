@@ -119,10 +119,10 @@ inline CommandPolicy commandPolicy(const std::string &name) {
                 else item += c;
             }
         };
-        add(CommandPolicy::Ordinary, "afk back blockinfo blockscan bottom broadcast clearchat cords discord entityinfo home iteminfo monitor more msgtoggle nickname ping playtime reply rules socialspy spawn spectate speed staffchat top tip toast voice warp activitylist filterlist altspy modspy");
+        add(CommandPolicy::Ordinary, "warnings afk back blockinfo blockscan bottom broadcast clearchat cords discord entityinfo home iteminfo monitor more msgtoggle nickname ping playtime reply rules socialspy spawn spectate speed staffchat top tip toast voice warp activitylist filterlist altspy modspy");
         add(CommandPolicy::Selector, "gma gmc gms gmsp gmt enchantforce giveforce hat itemlore itemname itemtag repair bossbar popup feed god heal fly send");
         add(CommandPolicy::Named, "activity check alts homeother offlinetp permissionslist note");
-        add(CommandPolicy::Moderation, "mute nameban nameunban permban punishments removeban silentmute tempban tempmute unmute unwarn warn warnings");
+        add(CommandPolicy::Moderation, "mute nameban nameunban permban punishments removeban silentmute tempban tempmute unmute unwarn warn staffwarnings");
         add(CommandPolicy::Owner, "motd setrules setback sethomes setspawn warps primebds reloadscripts updatepacks");
         add(CommandPolicy::Console, "alist ipban ipmute globalmute");
         p.emplace("rank", CommandPolicy::Rank);

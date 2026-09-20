@@ -52,6 +52,8 @@ int main() {
     check(!spyTargets("execute",{"as","Owner"},""),"indirect commands withheld from non-admin spies");
     check(!spyTargets("staffchat",{"staff message"},""),"staff channel withheld from non-admin command spies");
     check(spyTargets("speed",{"2","Owner"},"")->at(0)=="Owner","speed target included for privacy");
+    check(spyTargets("warnings",{"2"},"")->empty(),"Personal warning page is not another player's identity");
+    check(spyTargets("staffwarnings",{"Owner","delete","2"},"")->at(0)=="Owner","Staff warning recipient included for privacy");
     auto t=tokenize("/minecraft:gamemode creative \"Player With Spaces\"");
     check(t && t->size()==3 && (*t)[2]=="Player With Spaces","quoted native target");
     check(!tokenize("rank set \"unfinished"),"malformed quotes fail closed");

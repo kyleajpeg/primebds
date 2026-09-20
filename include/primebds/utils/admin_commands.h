@@ -28,7 +28,7 @@ private:
 inline std::vector<std::string> speedUsages() {
     return {
         "/speed [value: float] [player: string]",
-        "/speed (flyspeed|walkspeed)<mode: speed_mode> <value_or_reset: string> [player: string]",
+        "/speed (flyspeed|walkspeed)<mode: speed_mode> <value: float> [player: string]",
         "/speed (reset)<action: speed_action> [type_or_player: string] [player: string]"};
 }
 inline std::vector<std::string> nicknameUsages() {

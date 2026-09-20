@@ -12,6 +12,7 @@ namespace primebds::handlers::connections {
     void handleLoginEvent(PrimeBDS &plugin, endstone::PlayerLoginEvent &event) {
         auto &player = event.getPlayer();
         std::string xuid = player.getXuid();
+        plugin.permissions_pending.insert(xuid);
         std::string ip = player.getAddress().getHostname();
         std::string name = player.getName();
 

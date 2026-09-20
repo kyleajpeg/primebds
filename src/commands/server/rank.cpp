@@ -125,10 +125,17 @@ namespace primebds::commands {
             std::string player_name = args[1];
             std::string rank_name = args[2];
             auto *target = plugin.getServer().getPlayer(player_name);
-            if (!target) {
-                sender.sendMessage("\u00a7cPlayer \u00a7e" + player_name + " \u00a7cnot found online");
+            if (target && hierarchy::lower(target->getName()) != hierarchy::lower(player_name)) target = nullptr;
+            // Never assign a rank to an ambiguous historical name or partial online match.
+            if (!target && plugin.db->query("SELECT xuid FROM users WHERE name = ? COLLATE NOCASE", {player_name}).size() != 1) {
+                sender.sendMessage("Player name is unknown or ambiguous. Use their exact last recorded gamertag."); return false;
+            }
+            auto user = target ? plugin.db->getOnlineUser(target->getXuid()) : plugin.db->getUserByName(player_name);
+            if (!user) {
+                sender.sendMessage("Player record not found. Use the last recorded gamertag of someone who has joined before.");
                 return false;
             }
+            player_name = user->name;
             auto perms = cfg.loadPermissions();
             auto key = findRankKey(perms, rank_name);
             if (key.empty()) {
@@ -141,8 +148,8 @@ namespace primebds::commands {
                 const auto op = grants.find("primebds.minecraft.op");
                 const bool grants_op = op != grants.end() && op->second;
                 if (!hierarchy::canAssign(hierarchy::playerRank(plugin, sender.getName()),
-                        hierarchy::playerRank(plugin, target->getName()), destination,
-                        hierarchy::lower(sender.getName()) == hierarchy::lower(target->getName()), grants_op)) {
+                        hierarchy::rankOf(user->internal_rank), destination,
+                        hierarchy::lower(sender.getName()) == hierarchy::lower(user->name), grants_op)) {
                     sender.sendMessage("Rank assignment denied: target and destination must both be strictly below your rank.");
                     return false;
                 }
@@ -157,11 +164,19 @@ namespace primebds::commands {
                     }
                 }
             }
-            const bool changed = hierarchy::lower(hierarchy::playerRank(plugin, target->getName()).name) != hierarchy::lower(key);
-            plugin.db->setUserRank(target->getXuid(), key);
-            plugin.reloadCustomPerms(*target);
-            if (changed) plugin.reconcilePlayerState(*target);
-            sender.sendMessage("\u00a7e" + player_name + " \u00a7arank set to \u00a7e" + key);
+            const bool changed = hierarchy::lower(hierarchy::rankOf(user->internal_rank).name) != hierarchy::lower(key);
+            if (changed) plugin.db->assignRank(user->xuid, key, plugin.savedPermissions(user->xuid, key));
+            pm.invalidatePermCache(user->xuid);
+            pm.clearPrefixSuffixCache();
+            if (target) {
+                plugin.permissions_pending.insert(user->xuid);
+                if (!plugin.reloadCustomPerms(*target)) {
+                    sender.sendMessage("Rank saved; permission synchronization is pending. Reconnect the player.");
+                    return false;
+                }
+                if (changed) plugin.reconcilePlayerState(*target);
+            }
+            sender.sendMessage("\u00a7e" + player_name + " \u00a7arank set to \u00a7e" + key + (target ? "" : " (offline; gameplay changes apply on reconnect)"));
             return true;
         }
 

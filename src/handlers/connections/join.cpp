@@ -69,6 +69,8 @@ namespace primebds::handlers::connections {
         // Reload custom permissions on the next tick. Capture UUID by value and
         // re-resolve the player so a fast disconnect cannot leave us with a
         // dangling reference (which previously surfaced as std::bad_alloc).
+        // Revoke stale native OP while the saved rank is being synchronized.
+        if (plugin.db->pendingStateReset(xuid) && player.isOp()) player.setOp(false);
         auto uuid = player.getUniqueId();
         plugin.getServer().getScheduler().runTask(plugin, [&plugin, uuid]() {
             auto *p = plugin.getServer().getPlayer(uuid);

@@ -111,6 +111,9 @@ namespace primebds {
     bool PrimeBDS::onCommand(endstone::CommandSender &sender,
                              const endstone::Command &command,
                              const std::vector<std::string> &args) {
+        if (auto *player = sender.asPlayer(); player && permissions_pending.contains(player->getXuid())) {
+            sender.sendMessage("Your permissions are still loading. Please try again shortly."); return true;
+        }
         // Defense in depth for callers reaching the executor directly.
         if (!command.testPermission(sender))
             return true;
@@ -127,13 +130,13 @@ namespace primebds {
         return false;
     }
 
-    void PrimeBDS::reconcilePlayerState(endstone::Player &player) {
+    void PrimeBDS::reconcilePlayerState(endstone::Player &player, int revoked) {
         const auto has = [&](const std::string &node) { return player.hasPermission("primebds.command." + node); };
         std::map<std::string, bool> preferences;
         for (const auto *node : {"msgtoggle", "socialspy", "modspy", "altspy", "staffchat", "afk"})
             preferences["primebds.command." + std::string(node)] = has(node);
         db->resetUnavailableSettings(player.getXuid(), preferences);
-        if (!has("god") && !has("god.other")) isgod.set(player, false);
+        if ((revoked & utils::GodReset) || (!has("god") && !has("god.other"))) isgod.set(player, false);
         if (!has("afk")) afk_cache.erase(player.getXuid());
         for (auto *intervals : {&monitor_intervals, &blockscan_intervals}) {
             const auto node = intervals == &monitor_intervals ? "monitor" : "blockscan";
@@ -149,41 +152,27 @@ namespace primebds {
         const bool was_flying = player.isFlying();
         const auto walk_speed = player.getWalkSpeed();
         const auto fly_speed = player.getFlySpeed();
-        if (!utils::mayKeepGameMode(static_cast<int>(mode), [&](const std::string &node) {
+        if (utils::modeWasRevoked(static_cast<int>(mode), revoked) || !utils::mayKeepGameMode(static_cast<int>(mode), [&](const std::string &node) {
                 return player.hasPermission(node);
             })) player.setGameMode(endstone::GameMode::Survival);
         const auto current_mode = player.getGameMode();
-        if (!has("fly") && current_mode != endstone::GameMode::Creative &&
+        if (((revoked & utils::FlightReset) || !has("fly")) && current_mode != endstone::GameMode::Creative &&
             current_mode != endstone::GameMode::Spectator) {
             player.setFlying(false);
             player.setAllowFlight(false);
-        } else if (has("fly") && mode != current_mode) {
+        } else if (!(revoked & utils::FlightReset) && has("fly") && mode != current_mode) {
             player.setAllowFlight(allowed_flight);
             player.setFlying(allowed_flight && was_flying);
         }
-        player.setWalkSpeed(has("speed") ? walk_speed : 0.1f);
-        player.setFlySpeed(has("speed") ? fly_speed : 0.05f);
-        if (!has("nickname") && !has("nickname.other")) player.setNameTag(player.getName());
+        player.setWalkSpeed(!(revoked & utils::SpeedReset) && has("speed") ? walk_speed : 0.1f);
+        player.setFlySpeed(!(revoked & utils::SpeedReset) && has("speed") ? fly_speed : 0.05f);
+        if ((revoked & utils::NicknameReset) || (!has("nickname") && !has("nickname.other"))) player.setNameTag(player.getName());
     }
 
-    void PrimeBDS::reloadCustomPerms(endstone::Player &player) {
+    std::map<std::string, bool> PrimeBDS::savedPermissions(const std::string &xuid, const std::string &rank) {
         auto &pm = permissions::PermissionManager::instance();
-        auto user = db->getOnlineUser(player.getXuid());
-        if (!user) {
-            // Player not in DB yet — save them first
-            db->saveUser(player.getXuid(), player.getUniqueId().str(),
-                         player.getName(), static_cast<int>(player.getPing().count()),
-                         player.getDeviceOS(), player.getDeviceId(),
-                         static_cast<int64_t>(player.getRuntimeId()),
-                         player.getGameVersion());
-            user = db->getOnlineUser(player.getXuid());
-            if (!user)
-                return;
-        }
-
-        std::string internal_rank = pm.checkRankExists(*this, player, user->internal_rank);
-        auto rank_permissions = pm.getRankPermissions(internal_rank);
-        auto user_permissions = db->getPermissions(player.getXuid());
+        auto rank_permissions = pm.getRankPermissions(rank);
+        auto user_permissions = db->getPermissions(xuid);
         auto &managed_perms = pm.MANAGED_PERMISSIONS_LIST;
 
         // Linked permission groups — if any in the group are true, all become true
@@ -226,6 +215,35 @@ namespace primebds {
             }
         }
 
+        // Match the plugin-prefix overrides applied to live attachments.
+        for (auto &[node, value] : final_permissions) {
+            const auto prefix = node.substr(0, node.find('.'));
+            if (prefix == "minecraft" || prefix == "endstone") continue;
+            auto star = final_permissions.find(prefix + ".command");
+            if (star == final_permissions.end()) star = final_permissions.find(prefix);
+            if (star != final_permissions.end()) value = star->second;
+        }
+        return final_permissions;
+    }
+
+    bool PrimeBDS::reloadCustomPerms(endstone::Player &player) {
+        auto &pm = permissions::PermissionManager::instance();
+        auto user = db->getOnlineUser(player.getXuid());
+        if (!user) {
+            // Player not in DB yet — save them first
+            db->saveUser(player.getXuid(), player.getUniqueId().str(),
+                         player.getName(), static_cast<int>(player.getPing().count()),
+                         player.getDeviceOS(), player.getDeviceId(),
+                         static_cast<int64_t>(player.getRuntimeId()),
+                         player.getGameVersion());
+            user = db->getOnlineUser(player.getXuid());
+            if (!user)
+                return false;
+        }
+
+        std::string internal_rank = pm.checkRankExists(*this, player, user->internal_rank);
+        auto final_permissions = savedPermissions(player.getXuid(), internal_rank);
+
         {
             std::set<endstone::PermissionAttachment *> to_remove;
             for (auto *info : player.getEffectivePermissions()) {
@@ -243,34 +261,11 @@ namespace primebds {
         // Create new attachment and apply all permissions
         auto *attachment = player.addAttachment(*this, "primebdsoverride", true);
         if (!attachment)
-            return;
+            return false;
 
-        // Detect plugin-star overrides (e.g. "minecraft" or "minecraft.command")
-        static const std::set<std::string> internal_perms = {
-            "minecraft", "minecraft.command", "endstone", "endstone.command"};
-
-        std::map<std::string, bool> plugin_stars;
-        for (auto &[perm, value] : final_permissions) {
-            if (internal_perms.count(perm))
-                continue;
-            auto dot = perm.find('.');
-            std::string prefix = (dot != std::string::npos) ? perm.substr(0, dot) : perm;
-            std::string cmd_key = prefix + ".command";
-            if (prefix == perm || cmd_key == perm)
-                plugin_stars[prefix] = value;
-        }
-
-        // Apply permissions
-        for (auto &[perm, value] : final_permissions) {
-            if (internal_perms.count(perm))
-                continue;
-            auto dot = perm.find('.');
-            std::string prefix = (dot != std::string::npos) ? perm.substr(0, dot) : perm;
-            auto star_it = plugin_stars.find(prefix);
-            if (star_it != plugin_stars.end())
-                attachment->setPermission(perm, star_it->second);
-            else
-                attachment->setPermission(perm, value);
+        for (const auto &[perm, value] : final_permissions) {
+            if (perm == "minecraft" || perm == "minecraft.command" || perm == "endstone" || perm == "endstone.command") continue;
+            attachment->setPermission(perm, value);
         }
 
         {
@@ -285,6 +280,13 @@ namespace primebds {
         if (hierarchy::lower(internal_rank) != hierarchy::lower(user->internal_rank)) reconcilePlayerState(player);
         pm.clearPrefixSuffixCache();
         pm.invalidatePermCache(player.getXuid());
+        const int pending = db->pendingStateReset(player.getXuid());
+        if (pending) {
+            reconcilePlayerState(player, pending);
+            db->clearPendingStateReset(player.getXuid());
+        }
+        permissions_pending.erase(player.getXuid());
+        return true;
     }
 
     void PrimeBDS::checkForInactiveSessions() {
@@ -360,6 +362,11 @@ namespace primebds {
     }
 
     void EventListener::onPlayerCommand(endstone::PlayerCommandEvent &event) {
+        if (plugin_.permissions_pending.contains(event.getPlayer().getXuid())) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage("Your permissions are still loading. Please try again shortly.");
+            return;
+        }
         handlers::preprocesses::handleCommandPreprocess(plugin_, event);
     }
 
@@ -381,7 +388,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.7", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.8", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

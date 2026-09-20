@@ -1,3 +1,4 @@
+#include "primebds/utils/warning_command.h"
 #include "primebds/commands/command_metadata.h"
 #include "primebds/utils/admin_commands.h"
 
@@ -468,14 +469,17 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .permissions("primebds.command.unwarn");
 
     cmd(b, "warn").description("Warn a player that they are breaking a rule!")
-        .usages("/warn <player: player> <reason: string> [duration: int] [unit: string]")
+        .usages(utils::warningUsages())
         .permissions("primebds.command.warn");
 
-    cmd(b, "warnings").description("List or delete warnings for a player!")
-        .usages(
-            "/warnings [player: string] [page: int]",
-            "/warnings <player: string> (delete|clear)<action: warn_action> [id: int]")
-        .permissions("primebds.command.warnings", "primebds.command.warnings.self");
+    cmd(b, "warnings").description("Read your own warning history")
+        .usages("/warnings [page: int]")
+        .permissions("primebds.command.warnings.self", "primebds.command.warnings");
+    cmd(b, "staffwarnings").description("View or manage a player's warnings")
+        .usages("/staffwarnings <player: string> [page: int]",
+                "/staffwarnings <player: string> (delete)<action: staffwarnings_delete> <id: int>",
+                "/staffwarnings <player: string> (clear)<action: staffwarnings_clear>")
+        .permissions("primebds.command.warnings");
 
     // -----------------------------------------------------------------------
     // MOVEMENT

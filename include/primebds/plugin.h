@@ -49,8 +49,10 @@ namespace primebds {
                        const std::vector<std::string> &args) override;
 
         // Re-apply custom permissions for a player
-        void reloadCustomPerms(endstone::Player &player);
-        void reconcilePlayerState(endstone::Player &player);
+        bool reloadCustomPerms(endstone::Player &player);
+        std::map<std::string, bool> savedPermissions(const std::string &xuid, const std::string &rank);
+        void reconcilePlayerState(endstone::Player &player, int revoked = 0);
+        std::set<std::string> permissions_pending;
 
         // Check for stale sessions from unclean shutdown
         void checkForInactiveSessions();

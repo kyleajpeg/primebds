@@ -2,6 +2,7 @@
 /// User database implementation.
 
 #include "primebds/utils/database/user_db.h"
+#include "primebds/utils/player_state_policy.h"
 
 #include <nlohmann/json.hpp>
 #include <ctime>
@@ -38,6 +39,10 @@ namespace primebds::db {
                               {"enabled_ms", "INTEGER DEFAULT 0"},
                               {"enabled_as", "INTEGER DEFAULT 0"},
                               {"enabled_sc", "INTEGER DEFAULT 0"}});
+
+        const auto user_columns = getColumnNames("users");
+        if (std::find(user_columns.begin(), user_columns.end(), "pending_state_reset") == user_columns.end())
+            execute("ALTER TABLE users ADD COLUMN pending_state_reset INTEGER NOT NULL DEFAULT 0");
 
         createTable("mod_logs", {{"xuid", "TEXT UNIQUE NOT NULL"},
                                  {"name", "TEXT"},
@@ -675,6 +680,34 @@ namespace primebds::db {
             "is_afk = CASE WHEN ? THEN is_afk ELSE 0 END WHERE xuid = ?",
             {has("msgtoggle"), has("socialspy"), has("modspy"), has("altspy"), has("staffchat"), has("afk"), xuid});
         invalidateUserCache(xuid);
+    }
+
+    // One statement atomically commits rank, preference revocations, and reconnect work.
+    // OR preserves intermediate revocations if someone is demoted then promoted offline.
+    void UserDB::assignRank(const std::string &xuid, const std::string &rank,
+                            const std::map<std::string, bool> &permissions) {
+        const auto has = [&](const std::string &node) {
+            const auto found = permissions.find(node);
+            return found != permissions.end() && found->second;
+        };
+        const auto flag = [&](const std::string &node) { return has("primebds.command." + node) ? "1" : "0"; };
+        execute("UPDATE users SET internal_rank = ?, pending_state_reset = pending_state_reset | ?, "
+            "enabled_mt = CASE WHEN ? THEN enabled_mt ELSE 1 END, "
+            "enabled_ss = CASE WHEN ? THEN enabled_ss ELSE 0 END, "
+            "enabled_ms = CASE WHEN ? THEN enabled_ms ELSE 0 END, "
+            "enabled_as = CASE WHEN ? THEN enabled_as ELSE 0 END, "
+            "enabled_sc = CASE WHEN ? THEN enabled_sc ELSE 0 END, "
+            "is_afk = CASE WHEN ? THEN is_afk ELSE 0 END WHERE xuid = ?",
+            {rank, std::to_string(utils::unavailableState(has)), flag("msgtoggle"), flag("socialspy"),
+             flag("modspy"), flag("altspy"), flag("staffchat"), flag("afk"), xuid});
+        invalidateUserCache(xuid);
+    }
+    int UserDB::pendingStateReset(const std::string &xuid) {
+        auto row = queryRow("SELECT pending_state_reset FROM users WHERE xuid = ?", {xuid});
+        return row ? std::stoi(row->at("pending_state_reset")) : 0;
+    }
+    void UserDB::clearPendingStateReset(const std::string &xuid) {
+        execute("UPDATE users SET pending_state_reset = 0 WHERE xuid = ?", {xuid});
     }
 
     void UserDB::setUserRank(const std::string &xuid, const std::string &rank) {
