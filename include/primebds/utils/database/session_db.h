@@ -24,6 +24,8 @@ namespace primebds::db {
         std::vector<std::map<std::string, std::string>> getRecentSessions(
             const std::string &xuid, int limit = 10);
         int64_t getTotalPlaytime(const std::string &xuid);
+        std::vector<std::map<std::string, std::string>> getActivitySummary(
+            const std::string &filter, int64_t now);
 
     private:
         void createTables();

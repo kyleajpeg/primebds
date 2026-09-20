@@ -4,6 +4,7 @@
 #include "primebds/utils/database/session_db.h"
 
 #include <ctime>
+#include <stdexcept>
 
 namespace primebds::db {
 
@@ -59,6 +60,22 @@ namespace primebds::db {
         return query(
             "SELECT * FROM sessions WHERE xuid = ? ORDER BY join_time DESC LIMIT ?",
             {xuid, std::to_string(limit)});
+    }
+
+    std::vector<std::map<std::string, std::string>> SessionDB::getActivitySummary(
+        const std::string &filter, int64_t now) {
+        std::string order;
+        if (filter == "highest") order = "total DESC";
+        else if (filter == "lowest") order = "total ASC";
+        else if (filter == "recent") order = "last_join DESC";
+        else throw std::invalid_argument("Unknown activity filter");
+        return query(
+            "SELECT s.xuid, (SELECT name FROM sessions n WHERE n.xuid=s.xuid "
+            "ORDER BY n.join_time DESC, n.id DESC LIMIT 1) AS name, "
+            "SUM(MAX(0, (CASE WHEN s.leave_time>0 THEN s.leave_time "
+            "ELSE CAST(? AS INTEGER) END)-s.join_time)) AS total, "
+            "MAX(s.join_time) AS last_join FROM sessions s GROUP BY s.xuid "
+            "ORDER BY " + order + ", s.xuid ASC", {std::to_string(now)});
     }
 
 } // namespace primebds::db

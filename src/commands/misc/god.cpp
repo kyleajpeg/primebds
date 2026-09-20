@@ -24,12 +24,11 @@ namespace primebds::commands {
                 sender.sendMessage("\u00a7cThis command can only be executed by a player");
                 return false;
             }
-            std::string id = std::to_string(player->getRuntimeId());
-            if (plugin.isgod.count(id)) {
-                plugin.isgod.erase(id);
+            if (plugin.isgod.enabled(*player)) {
+                plugin.isgod.set(*player, false);
                 player->sendMessage("\u00a7cYou are no longer invulnerable");
             } else {
-                plugin.isgod.insert(id);
+                plugin.isgod.set(*player, true);
                 player->sendMessage("\u00a7aYou are now invulnerable");
             }
             return true;
@@ -44,20 +43,19 @@ namespace primebds::commands {
             auto *p = dynamic_cast<endstone::Player *>(t);
             if (!p)
                 continue;
-            std::string id = std::to_string(p->getRuntimeId());
             bool enable;
             if (force == "true" || force == "on" || force == "1")
                 enable = true;
             else if (force == "false" || force == "off" || force == "0")
                 enable = false;
             else
-                enable = !plugin.isgod.count(id);
+                enable = !plugin.isgod.enabled(*p);
 
             if (enable) {
-                plugin.isgod.insert(id);
+                plugin.isgod.set(*p, true);
                 p->sendMessage("\u00a7aYou are now invulnerable");
             } else {
-                plugin.isgod.erase(id);
+                plugin.isgod.set(*p, false);
                 p->sendMessage("\u00a7cYou are no longer invulnerable");
             }
         }

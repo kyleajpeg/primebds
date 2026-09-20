@@ -11,6 +11,7 @@
 #include "primebds/utils/database/session_db.h"
 #include "primebds/utils/database/user_db.h"
 #include "primebds/utils/intervals.h"
+#include "primebds/utils/admin_commands.h"
 
 // Handler includes (split organization)
 #include "primebds/handlers/actions.h"
@@ -68,7 +69,7 @@ namespace primebds {
         std::map<std::string, bool> vanish_state;
         std::map<std::string, bool> afk_cache;
         std::set<std::string> silentmutes;
-        std::set<std::string> isgod;
+        utils::GodModeState isgod;
         std::set<std::string> crasher_patch_applied;
 
         // Chat cooldown (player id -> last chat timestamp)

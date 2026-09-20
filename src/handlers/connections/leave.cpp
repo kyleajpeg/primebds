@@ -14,6 +14,7 @@ namespace primebds::handlers::connections {
 
     void handleLeaveEvent(PrimeBDS &plugin, endstone::PlayerQuitEvent &event) {
         auto &player = event.getPlayer();
+        plugin.isgod.set(player, false);
         auto &cfg = config::ConfigManager::instance();
         auto conf = cfg.config();
         auto &modules = conf["modules"];

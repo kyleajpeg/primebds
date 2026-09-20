@@ -1,50 +1,44 @@
-/// @file feed.cpp
-/// Sets player hunger to full!
-
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
 #include "primebds/utils/target_selector.h"
 
 namespace primebds::commands {
+    static bool cmd_feed(PrimeBDS &, endstone::CommandSender &, const std::vector<std::string> &);
+    REGISTER_COMMAND(feed, "Refill player hunger using saturation!", cmd_feed,
+        info.usages = {"/feed [player: player]"};
+        info.permissions = {"primebds.command.feed", "primebds.command.feed.other"};
+        info.default_permission = "op";
+        info.aliases = {"eat"};);
 
-    static bool cmd_feed(PrimeBDS &, endstone::CommandSender &,
-                        const std::vector<std::string> &);
-
-    REGISTER_COMMAND(feed, "Sets player hunger to full!", cmd_feed,
-                     info.usages = {"/feed [player: player]"};
-                     info.permissions = {"primebds.command.feed", "primebds.command.feed.other"};
-                     info.default_permission = "op";
-                     info.aliases = {"eat"};);
-
-    /// Sets player hunger to full!
     static bool cmd_feed(PrimeBDS &plugin, endstone::CommandSender &sender,
                          const std::vector<std::string> &args) {
-        if (args.empty()) {
-            auto *player = sender.asPlayer();
-            if (!player) {
-                sender.sendMessage("This command can only be executed by a player");
-                return false;
+        if (args.size() > 1) return false;
+        auto *self = sender.asPlayer();
+        if (args.empty() && !self) {
+            sender.sendMessage("Specify a player to feed from the console.");
+            return false;
+        }
+        auto targets = args.empty() ? std::vector<endstone::Actor *>{self}
+            : utils::getMatchingActors(plugin.getServer(), args[0], sender);
+        int count = 0;
+        for (auto *actor : targets) {
+            auto *player = dynamic_cast<endstone::Player *>(actor);
+            if (!player) continue;
+            if (player != self && !sender.hasPermission("primebds.command.feed.other")) {
+                sender.sendMessage("You do not have permission to feed other players.");
+                continue;
             }
-            (void)plugin.getServer().dispatchCommand(plugin.getServer().getCommandSender(),
-                                                     "effect " + player->getName() + " saturation 3 255 true");
-            player->sendMessage("\u00a7aYou were fed");
-            return true;
-        }
-        if (!sender.hasPermission("primebds.command.feed.other")) {
-            sender.sendMessage("\u00a7cYou do not have permission to feed others");
-            return true;
-        }
-        auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
-        for (auto *t : targets) {
-            auto *p = dynamic_cast<endstone::Player *>(t);
-            if (p) {
-                (void)plugin.getServer().dispatchCommand(plugin.getServer().getCommandSender(),
-                                                         "effect " + p->getName() + " saturation 3 255 true");
-                p->sendMessage("\u00a7aYou were fed");
+            const bool applied = plugin.getServer().dispatchCommand(plugin.getServer().getCommandSender(),
+                                                                     utils::feedCommand(player->getName()));
+            if (!applied) {
+                sender.sendMessage("Could not apply saturation to " + player->getName() + "; check the console error.");
+                continue;
             }
+            player->sendMessage("Saturation applied to refill your hunger.");
+            if (player != self) sender.sendMessage("Saturation applied to " + player->getName() + ".");
+            ++count;
         }
-        sender.sendMessage("\u00a7e" + std::to_string(targets.size()) + " \u00a7rplayers were fed");
-        return true;
+        if (targets.empty()) sender.sendMessage("No matching players found.");
+        return count > 0;
     }
-
-} // namespace primebds::commands
+}

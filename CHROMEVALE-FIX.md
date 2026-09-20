@@ -1,11 +1,26 @@
 # ChromeVale permission fix
 
 Based on upstream PrimeBDS v3.4.3, commit 4979fe2ae044828c834433655c83f2c1b177fb11.
-The plugin identifies itself as **3.4.3-chromevale.3** and keeps the `primebds`
+The plugin identifies itself as **3.4.3-chromevale.4** and keeps the `primebds`
 plugin name and existing data directory. Rank JSON, player databases, world
 files and chat colors are not replaced by this patch.
 
 ## Changes
+
+- Version `.4` fixes god mode's runtime-ID/UUID mismatch by sharing UUID-keyed
+  state between the command and damage handler. State clears on player quit.
+  Speed reset now restores both defaults (walk 0.1, fly 0.05), and supports
+  mode-specific and targeted resets. Speed inputs reject invalid numbers.
+  Nickname supports remove/reset and an optional target, with a separate
+  `primebds.command.nickname.other` permission for changing other players.
+  Activity listing now reads recorded sessions, includes open-session time,
+  sorts highest/lowest/recent, and paginates ten players per page. Bare usage
+  defaults to highest/page 1; both filter-first and page-first forms work.
+  Feed quotes target names, uses saturation 1 19, checks command dispatch's
+  return value, and reports saturation rather than claiming verified food state.
+  Its actual hunger result still requires live BDS validation. Tests exercise
+  command parsing, UUID state, argument quoting and the actual session database;
+  they do not simulate Bedrock's client command parser or damage/effect engine.
 
 - Version `.3` makes private messages enabled (`enabled_mt=1`) when a player
   is first inserted into the user database. The INSERT supplies the value
@@ -78,7 +93,7 @@ Use a test instance/world or a maintenance session with only trusted testers.
 
 1. Stop the server and replace only `plugins/endstone_primebds.so` with the
    new artifact. Do not install two copies. Preserve the existing data folder.
-2. Start and verify **3.4.3-chromevale.3** loads without errors.
+2. Start and verify **3.4.3-chromevale.4** loads without errors.
 3. Using the panel, assign a connected test account Default. Check native op
    status as well. Clear any unintended per-player grants before the test.
 4. From that player's game client, try self-op, op of another tester, deop,

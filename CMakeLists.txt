@@ -91,6 +91,14 @@ if(PRIMEBDS_BUILD_TESTS)
     target_include_directories(user_message_defaults_test PRIVATE include)
     target_link_libraries(user_message_defaults_test PRIVATE nlohmann_json::nlohmann_json sqlite3)
     add_test(NAME user_message_defaults COMMAND user_message_defaults_test)
+    add_executable(admin_commands_test tests/admin_commands_test.cpp)
+    target_include_directories(admin_commands_test PRIVATE include)
+    add_test(NAME admin_commands COMMAND admin_commands_test)
+    add_executable(activity_summary_test tests/activity_summary_test.cpp
+        src/utils/database/session_db.cpp src/utils/database/database_manager.cpp)
+    target_include_directories(activity_summary_test PRIVATE include)
+    target_link_libraries(activity_summary_test PRIVATE sqlite3)
+    add_test(NAME activity_summary COMMAND activity_summary_test)
 endif()
 
 # Copy plugin binary to output/ folder after build

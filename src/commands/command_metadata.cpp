@@ -1,4 +1,5 @@
 #include "primebds/commands/command_metadata.h"
+#include "primebds/utils/admin_commands.h"
 
 #include <map>
 #include <sstream>
@@ -136,6 +137,11 @@ struct CmdBuilder {
     template <typename... A>
     CmdBuilder &permissions(A... a) {
         inner.permissions(a...);
+        return *this;
+    }
+
+    CmdBuilder &usages(const std::vector<std::string> &values) {
+        for (const auto &usage : uniquifyEnumNames(values)) inner.usages(usage);
         return *this;
     }
 
@@ -328,7 +334,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .permissions("primebds.command.activity");
 
     cmd(b, "activitylist").description("Lists players by activity filter!")
-        .usages("/activitylist (highest|lowest|recent)<filter: activity_filter> [page: int]")
+        .usages(utils::activityListUsages())
         .permissions("primebds.command.activitylist");
 
     cmd(b, "afk").description("Toggles AFK mode for yourself!")
@@ -373,8 +379,8 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .permissions("primebds.command.heal", "primebds.command.heal.other");
 
     cmd(b, "nickname").description("Set your display name!")
-        .usages("/nickname [name: string]")
-        .permissions("primebds.command.nickname")
+        .usages(utils::nicknameUsages())
+        .permissions("primebds.command.nickname", "primebds.command.nickname.other")
         .aliases("nick");
 
     cmd(b, "ping").description("Check your or another player's latency!")
@@ -528,10 +534,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .permissions("primebds.command.spawn");
 
     cmd(b, "speed").description("Modifies player flyspeed or walkspeed!")
-        .usages(
-            "/speed <value: float>",
-            "/speed (flyspeed|walkspeed)<mode: speed_mode> <value: float> [player: player]",
-            "/speed (reset)<action: speed_action> <type: string> [player: player]")
+        .usages(utils::speedUsages())
         .permissions("primebds.command.speed");
 
     cmd(b, "top").description("Warps you to the topmost block with air!")
