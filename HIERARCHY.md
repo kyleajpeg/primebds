@@ -36,7 +36,9 @@ IP bans/mutes, global mute, allowlist changes, indirect native execution
 (`/execute`, `/function`, scripts and scheduling), native reload/config commands,
 scoreboards, unknown commands and native multi-target selectors require the panel.
 Reviewed native target commands accept literal player names and usually `@s`;
-native teleport is limited to `/tp <player> <player>`. PrimeBDS utility commands
+native teleport accepts literal player names and coordinate forms (with optional
+rotation/checkForBlocks), checking every named participant. Complex facing/selector
+forms need the panel. PrimeBDS utility commands
 retain their selector support with the shared rank checks.
 
 World/server management is Owner/panel-only. This is a direct command-target and

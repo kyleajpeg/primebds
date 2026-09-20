@@ -65,6 +65,37 @@ inline std::string canonicalName(std::string name) {
     }
     return name;
 }
+// Limited native teleport grammar; unreviewed facing/selector forms fail closed.
+inline bool coordinate(std::string value) {
+    if (value.empty()) return false;
+    if (value.front() == '~' || value.front() == '^') {
+        value.erase(0, 1);
+        if (value.empty()) return true;
+    }
+    if (value.front() == '+' || value.front() == '-') value.erase(0, 1);
+    bool digit = false, dot = false;
+    for (unsigned char c : value) {
+        if (c >= '0' && c <= '9') digit = true;
+        else if (c == '.' && !dot) dot = true;
+        else return false;
+    }
+    return digit;
+}
+inline std::optional<std::vector<std::string>> teleportTargets(std::vector<std::string> args) {
+    if (args.empty()) return std::nullopt;
+    if (args.back() == "true" || args.back() == "false") args.pop_back();
+    auto name = [](const std::string &s) { return !s.empty() && s.front() != '@'; };
+    if (args.size() == 1 && name(args[0])) return std::vector<std::string>{args[0]};
+    if (args.size() == 2 && name(args[0]) && name(args[1])) return args;
+    std::size_t offset;
+    if (args.size() == 3 || args.size() == 5) offset = 0;
+    else if ((args.size() == 4 || args.size() == 6) && name(args[0])) offset = 1;
+    else return std::nullopt;
+    for (std::size_t i = offset; i < args.size(); ++i)
+        if (!coordinate(args[i])) return std::nullopt;
+    return offset ? std::vector<std::string>{args[0]} : std::vector<std::string>{};
+}
+
 enum class CommandPolicy { Deny, Ordinary, Selector, Named, Moderation, Owner, Rank, Permissions, Console };
 inline CommandPolicy commandPolicy(const std::string &name) {
     static const std::map<std::string, CommandPolicy> policies = [] {

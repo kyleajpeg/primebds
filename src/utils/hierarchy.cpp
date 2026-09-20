@@ -114,11 +114,10 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
         "camera", "hud", "fog", "playanimation", "stopsound", "spawnpoint", "clearspawnpoint", "tag", "transfer"};
     if (name == "gamemode" || name == "xp" || name == "playsound") index = 1;
     else if (name == "teleport" || name == "tp") {
-        // Accept a literal victim and literal player destination. Complex native selector/coordinate
-        // execution has different semantics from PrimeBDS selectors, so keep it console-only.
-        if (args.size() != 2) { sender.sendMessage("Use /tp <player> <player>; complex teleport forms require the panel."); return false; }
-        for (const auto &target : args)
-            if (target.empty() || target.front() == '@' || !requireTarget(plugin, sender, target)) return false;
+        const auto targets = teleportTargets(args);
+        if (!targets) { sender.sendMessage("Use literal names or coordinates; complex teleport forms require the panel."); return false; }
+        for (const auto &target : *targets)
+            if (!requireTarget(plugin, sender, target)) return false;
         return true;
     } else if (!first_target.contains(name)) {
         sender.sendMessage("This native command has no reviewed hierarchy policy; use the panel console.");

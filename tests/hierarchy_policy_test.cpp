@@ -42,5 +42,14 @@ int main() {
     check(canonicalName("other:op")=="other:op","unrecognized namespace stays unrecognized");
     check(commandPolicy("future_unreviewed_command")==CommandPolicy::Deny,"new commands fail closed");
     check(commandPolicy("ipban")==CommandPolicy::Console,"IP collateral cannot bypass hierarchy");
+    check(teleportTargets({"10","64","-10"})->empty(),"self coordinate teleport for homes/warps");
+    check(teleportTargets({"~","~1","~-1","90","0","true"})->empty(),"relative coordinates and rotation");
+    check(teleportTargets({"Member","1","2","3"})->at(0)=="Member","coordinate victim extracted");
+    check(teleportTargets({"Owner"})->at(0)=="Owner","single destination must be checked");
+    check(teleportTargets({"Member","Owner"})->size()==2,"both teleport identities checked");
+    check(!teleportTargets({"@a","1","2","3"}),"native selector teleport denied");
+    check(!teleportTargets({"Member","~","~","~","facing","Owner"}),"unreviewed facing forms denied");
+    check(!teleportTargets({"1","2","Owner"}),"coordinate/name ambiguity denied");
+    check(!coordinate("~-") && !coordinate("nan") && !coordinate("1;op"),"malformed coordinates denied");
     std::cout << "Hierarchy target, assignment, privacy and parser policy tests passed.\n";
 }
