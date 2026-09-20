@@ -116,6 +116,7 @@ namespace primebds {
         void onPlayerJoin(endstone::PlayerJoinEvent &event);
         void onPlayerQuit(endstone::PlayerQuitEvent &event);
         void onPlayerKick(endstone::PlayerKickEvent &event);
+        void onPlayerCommandAudit(endstone::PlayerCommandEvent &event);
         void onPlayerCommand(endstone::PlayerCommandEvent &event);
         void onServerCommand(endstone::ServerCommandEvent &event);
         void onPlayerChat(endstone::PlayerChatEvent &event);

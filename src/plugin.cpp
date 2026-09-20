@@ -6,6 +6,7 @@
 #include "primebds/utils/database/server_db.h"
 #include "primebds/utils/permissions/permission_manager.h"
 #include "primebds/utils/logging.h"
+#include "primebds/utils/command_audit.h"
 
 #include "primebds/commands/command_metadata.h"
 
@@ -52,6 +53,9 @@ namespace primebds {
         registerEvent(&EventListener::onPlayerQuit, *listener_);
         registerEvent(&EventListener::onPlayerKick, *listener_);
         registerEvent(&EventListener::onPlayerChat, *listener_);
+        // Observe submissions before our normal-priority permission/remap handler.
+        // Receive cancelled events too; an attempt is still worth recording.
+        registerEvent(&EventListener::onPlayerCommandAudit, *listener_, endstone::EventPriority::Lowest, false);
         registerEvent(&EventListener::onPlayerCommand, *listener_);
         registerEvent(&EventListener::onServerCommand, *listener_);
         registerEvent(&EventListener::onPlayerDeath, *listener_);
@@ -312,6 +316,10 @@ namespace primebds {
         handlers::connections::handleKickEvent(plugin_, event);
     }
 
+    void EventListener::onPlayerCommandAudit(endstone::PlayerCommandEvent &event) {
+        plugin_.getLogger().info("{}", utils::formatCommandAttempt(event.getPlayer().getName(), event.getCommand()));
+    }
+
     void EventListener::onPlayerCommand(endstone::PlayerCommandEvent &event) {
         handlers::preprocesses::handleCommandPreprocess(plugin_, event);
     }
@@ -334,7 +342,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.1", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.2", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

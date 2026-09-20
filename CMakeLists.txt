@@ -75,12 +75,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     sqlite3
 )
 
-option(PRIMEBDS_BUILD_TESTS "Build permission regression tests" ON)
+option(PRIMEBDS_BUILD_TESTS "Build permission and audit regression tests" ON)
 if(PRIMEBDS_BUILD_TESTS)
     enable_testing()
     add_executable(command_authorization_test tests/command_authorization_test.cpp)
     target_include_directories(command_authorization_test PRIVATE include)
     add_test(NAME command_authorization COMMAND command_authorization_test)
+    add_executable(command_audit_test tests/command_audit_test.cpp)
+    target_include_directories(command_audit_test PRIVATE include)
+    add_test(NAME command_audit COMMAND command_audit_test)
 endif()
 
 # Copy plugin binary to output/ folder after build

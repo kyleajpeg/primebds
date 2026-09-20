@@ -1,11 +1,26 @@
 # ChromeVale permission fix
 
 Based on upstream PrimeBDS v3.4.3, commit 4979fe2ae044828c834433655c83f2c1b177fb11.
-The plugin identifies itself as **3.4.3-chromevale.1** and keeps the `primebds`
+The plugin identifies itself as **3.4.3-chromevale.2** and keeps the `primebds`
 plugin name and existing data directory. Rank JSON, player databases, world
 files and chat colors are not replaced by this patch.
 
 ## Changes
+
+- Version `.2` adds a console `[CommandAudit]` entry for every player command
+  event received, before PrimeBDS checks permissions or remaps commands.
+  Denied, unknown and already-cancelled submissions are included. Each entry
+  records an attempt, not successful execution. Existing native logs remain,
+  so commands reaching normal dispatch can also have a native log entry.
+- The audit listener uses Lowest priority with ignore_cancelled=false and
+  never changes the event. Another plugin at the same priority can still
+  modify text before this listener; this is an event log, not packet capture.
+- The console audit includes command arguments (including whispers), uses no
+  new webhook or database, and escapes control/formatting characters to keep
+  records on one readable line. Ordinary chat keeps its existing logging.
+  Unsent typing and commands rejected by the client never reach this listener.
+  Logging costs one additional line and linear text formatting per event;
+  high command spam will increase log volume. No performance benchmark is claimed.
 
 - Authorize every intercepted player command before privileged side effects.
 - Require both `minecraft.command.op`/`minecraft.command.deop` and
@@ -53,7 +68,7 @@ Use a test instance/world or a maintenance session with only trusted testers.
 
 1. Stop the server and replace only `plugins/endstone_primebds.so` with the
    new artifact. Do not install two copies. Preserve the existing data folder.
-2. Start and verify **3.4.3-chromevale.1** loads without errors.
+2. Start and verify **3.4.3-chromevale.2** loads without errors.
 3. Using the panel, assign a connected test account Default. Check native op
    status as well. Clear any unintended per-player grants before the test.
 4. From that player's game client, try self-op, op of another tester, deop,
@@ -74,3 +89,13 @@ test log and build provenance. Do not restore the vulnerable upstream binary
 for normal multiplayer use; run Endstone without PrimeBDS while investigating.
 
 No chat-format changes are included; message text remains white as requested.
+
+## Command audit acceptance checks
+
+As Default, submit `/op <your name>`, `/rank list`, and an unknown command.
+Every submission that reaches Endstone's PlayerCommandEvent should produce a
+`[CommandAudit]` line, even when denied or unrecognized. Self-op must still fail.
+Check allowed commands as Owner, aliases, quoted arguments, and private messages.
+Confirm ordinary chat still logs as before. Automated audit tests verify text
+preservation and escaping of forged newlines, terminal escapes and color codes;
+actual console output and event delivery require this live server check.
