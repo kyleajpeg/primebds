@@ -40,7 +40,7 @@ namespace primebds::commands {
         }
 
         for (auto *t : targets) {
-            auto *p = dynamic_cast<endstone::Player *>(t);
+            auto *p = t->asPlayer();
             if (!p)
                 continue;
             auto held = utils::getItemFromSlot(p->getInventory(), slot);

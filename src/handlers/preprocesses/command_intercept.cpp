@@ -179,7 +179,7 @@ namespace primebds::handlers::preprocesses {
                 return;
 
             for (auto *actor : matched) {
-                auto *target_player = dynamic_cast<endstone::Player *>(actor);
+                auto *target_player = actor->asPlayer();
                 if (!target_player)
                     continue;
 

@@ -1,11 +1,24 @@
 # ChromeVale permission fix
 
 Based on upstream PrimeBDS v3.4.3, commit 4979fe2ae044828c834433655c83f2c1b177fb11.
-The plugin identifies itself as **3.4.3-chromevale.4** and keeps the `primebds`
+The plugin identifies itself as **3.4.3-chromevale.5** and keeps the `primebds`
 plugin name and existing data directory. Rank JSON, player databases, world
 files and chat colors are not replaced by this patch.
 
 ## Changes
+
+- Version `.5` replaces all 37 `dynamic_cast<endstone::Player *>` conversions
+  with the virtual Endstone `asPlayer()` API. The `.4` self speed/feed/nickname
+  paths newly went through this failing conversion, introducing regressions.
+  Targeted commands and the damage listener also used it upstream. God feedback
+  now counts processed players, not merely selector results; feed/nickname give
+  feedback if no player was processed. `/speed` with no arguments reads both
+  current ability values without modifying them. A source regression check bans
+  reintroducing player RTTI casts. The existing five behavior suites remain.
+  User's `.4` live result (self speed matches itself then processes zero players)
+  localizes the failure to the cast. Hidden RTTI across shared-library boundaries
+  is the likely underlying cause; no live server debugger was available.
+  Compilation and these tests still cannot prove all Bedrock gameplay behavior.
 
 - Version `.4` fixes god mode's runtime-ID/UUID mismatch by sharing UUID-keyed
   state between the command and damage handler. State clears on player quit.
@@ -93,7 +106,7 @@ Use a test instance/world or a maintenance session with only trusted testers.
 
 1. Stop the server and replace only `plugins/endstone_primebds.so` with the
    new artifact. Do not install two copies. Preserve the existing data folder.
-2. Start and verify **3.4.3-chromevale.4** loads without errors.
+2. Start and verify **3.4.3-chromevale.5** loads without errors.
 3. Using the panel, assign a connected test account Default. Check native op
    status as well. Clear any unintended per-player grants before the test.
 4. From that player's game client, try self-op, op of another tester, deop,

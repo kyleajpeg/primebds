@@ -44,7 +44,7 @@ namespace primebds::commands {
         auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
         int count = 0;
         for (auto *t : targets) {
-            auto *p = dynamic_cast<endstone::Player *>(t);
+            auto *p = t->asPlayer();
             if (!p)
                 continue;
             auto held = p->getInventory().getItemInMainHand();

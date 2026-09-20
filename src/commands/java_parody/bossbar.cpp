@@ -70,7 +70,7 @@ namespace primebds::commands {
                 auto targets = utils::getMatchingActors(plugin.getServer(), target_selector, sender);
                 int removed = 0;
                 for (auto *t : targets) {
-                    if (auto *p = dynamic_cast<endstone::Player *>(t)) {
+                    if (auto *p = t->asPlayer()) {
                         auto it = boss_bar_cache.find(p->getName());
                         if (it != boss_bar_cache.end()) {
                             it->second->removePlayer(*p);
@@ -119,7 +119,7 @@ namespace primebds::commands {
         }
 
         for (auto *t : targets) {
-            auto *p = dynamic_cast<endstone::Player *>(t);
+            auto *p = t->asPlayer();
             if (!p)
                 continue;
 

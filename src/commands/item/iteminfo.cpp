@@ -29,7 +29,7 @@ namespace primebds::commands {
         if (!args.empty()) {
             if (utils::isValidSlotType(args[0])) {
                 // No player specified, slot type is first arg — sender must be a player
-                auto *sp = dynamic_cast<endstone::Player *>(&sender);
+                auto *sp = sender.asPlayer();
                 if (!sp) {
                     sender.sendMessage("\u00a7cYou must specify a player from the console");
                     return false;
@@ -43,11 +43,11 @@ namespace primebds::commands {
                     sender.sendMessage("\u00a7cNo matching players found");
                     return false;
                 }
-                target = dynamic_cast<endstone::Player *>(targets[0]);
+                target = targets[0]->asPlayer();
                 slot_offset = 1;
             }
         } else {
-            auto *sp = dynamic_cast<endstone::Player *>(&sender);
+            auto *sp = sender.asPlayer();
             if (!sp) {
                 sender.sendMessage("\u00a7cYou must specify a player from the console");
                 return false;

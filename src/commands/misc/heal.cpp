@@ -34,7 +34,7 @@ namespace primebds::commands {
         }
         auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
         for (auto *t : targets) {
-            auto *p = dynamic_cast<endstone::Player *>(t);
+            auto *p = t->asPlayer();
             if (p) {
                 p->setHealth(p->getMaxHealth());
                 p->sendMessage("\u00a7aYou were healed");

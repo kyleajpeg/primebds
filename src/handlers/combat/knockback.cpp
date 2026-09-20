@@ -20,7 +20,7 @@ namespace primebds::handlers::combat {
         auto last_hit_it = plugin.entity_last_hit.find(entity_key);
         std::string last_hit_type = (last_hit_it != plugin.entity_last_hit.end()) ? last_hit_it->second : "";
 
-        auto *source_player = source ? dynamic_cast<endstone::Player *>(source) : nullptr;
+        auto *source_player = source ? source->asPlayer() : nullptr;
         std::vector<std::string> tags;
         if (source_player) {
             auto stags = source_player->getScoreboardTags();

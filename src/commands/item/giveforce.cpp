@@ -63,13 +63,13 @@ namespace primebds::commands {
         endstone::ItemStack item(item_type_id, amount, data);
 
         for (auto *t : targets) {
-            auto *p = dynamic_cast<endstone::Player *>(t);
+            auto *p = t->asPlayer();
             if (p)
                 p->getInventory().addItem(item);
         }
 
         if (targets.size() == 1) {
-            auto *p = dynamic_cast<endstone::Player *>(targets[0]);
+            auto *p = targets[0]->asPlayer();
             sender.sendMessage("\u00a7e" + (p ? p->getName() : "Player") +
                                " \u00a7rwas given \u00a77x" + std::to_string(amount) +
                                " \u00a7e" + block_id);

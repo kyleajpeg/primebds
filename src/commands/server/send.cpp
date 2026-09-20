@@ -43,7 +43,7 @@ namespace primebds::commands {
 
         int count = 0;
         for (auto *t : targets) {
-            if (auto *p = dynamic_cast<endstone::Player *>(t)) {
+            if (auto *p = t->asPlayer()) {
                 p->transfer(ip, port);
                 ++count;
             }

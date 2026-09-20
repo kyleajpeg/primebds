@@ -22,7 +22,7 @@ namespace primebds::commands {
             : utils::getMatchingActors(plugin.getServer(), args[0], sender);
         int count = 0;
         for (auto *actor : targets) {
-            auto *player = dynamic_cast<endstone::Player *>(actor);
+            auto *player = actor->asPlayer();
             if (!player) continue;
             if (player != self && !sender.hasPermission("primebds.command.feed.other")) {
                 sender.sendMessage("You do not have permission to feed other players.");
@@ -39,6 +39,7 @@ namespace primebds::commands {
             ++count;
         }
         if (targets.empty()) sender.sendMessage("No matching players found.");
+        else if (!count) sender.sendMessage("No players were fed; check permissions and the console output.");
         return count > 0;
     }
 }

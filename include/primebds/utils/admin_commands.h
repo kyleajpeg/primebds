@@ -27,7 +27,7 @@ private:
 
 inline std::vector<std::string> speedUsages() {
     return {
-        "/speed <value: float>",
+        "/speed [value: float]",
         "/speed (flyspeed|walkspeed)<mode: speed_mode> <value: float> [player: player]",
         "/speed (reset)<action: speed_action> [type_or_player: string] [player: player]",
         "/speed (flyspeed|walkspeed)<mode: speed_mode> (reset)<action: speed_action> [player: player]"};
@@ -44,6 +44,7 @@ inline std::vector<std::string> activityListUsages() {
 struct SpeedRequest {
     enum class Mode { Automatic, Walk, Fly, Both } mode = Mode::Automatic;
     bool reset = false;
+    bool query = false;
     float value = 0;
     std::string target;
 };
@@ -52,8 +53,9 @@ inline SpeedRequest::Mode speedMode(const std::string &s) {
     return s == "flyspeed" ? SpeedRequest::Mode::Fly : SpeedRequest::Mode::Walk;
 }
 inline std::optional<SpeedRequest> parseSpeed(const std::vector<std::string> &args) {
-    if (args.empty() || args.size() > 3) return std::nullopt;
     SpeedRequest result;
+    if (args.empty()) { result.query = true; return result; }
+    if (args.size() > 3) return std::nullopt;
     if (args[0] == "reset") {
         result.reset = true;
         result.mode = SpeedRequest::Mode::Both;

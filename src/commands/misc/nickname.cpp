@@ -21,7 +21,7 @@ namespace primebds::commands {
             : utils::getMatchingActors(plugin.getServer(), args[1], sender);
         int count = 0;
         for (auto *actor : targets) {
-            auto *player = dynamic_cast<endstone::Player *>(actor);
+            auto *player = actor->asPlayer();
             if (!player) continue;
             if (player != self && !sender.hasPermission("primebds.command.nickname.other")) {
                 sender.sendMessage("You do not have permission to change other players' nicknames.");
@@ -33,6 +33,7 @@ namespace primebds::commands {
             ++count;
         }
         if (!count && targets.empty()) sender.sendMessage("No matching players found.");
+        else if (!count) sender.sendMessage("No nicknames were changed; check permissions and the selected players.");
         return count > 0;
     }
 }

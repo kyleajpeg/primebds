@@ -40,7 +40,8 @@ int main() {
             check(!parseSpeed({bad}), "Invalid speed rejected");
         check(!parseSpeed({"reset", "Alice", "Bob"}), "Ambiguous reset rejected");
         check(!parseSpeed({"unknown", "1"}), "Unknown speed mode rejected");
-        check(!parseSpeed({}), "Missing speed rejected");
+        const auto query = parseSpeed({});
+        check(query && query->query && !query->reset, "Bare speed queries without modifying abilities");
 
         auto activity = parseActivityList({});
         check(activity && activity->page == 1 && activity->filter == "highest", "Activity defaults");

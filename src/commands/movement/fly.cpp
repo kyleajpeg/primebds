@@ -37,7 +37,7 @@ namespace primebds::commands {
 
         auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
         for (auto *t : targets) {
-            if (auto *p = dynamic_cast<endstone::Player *>(t)) {
+            if (auto *p = t->asPlayer()) {
                 bool flying = p->getAllowFlight();
                 p->setAllowFlight(!flying);
                 p->sendMessage(flying ? "\u00a7cFlight disabled" : "\u00a7aFlight enabled");

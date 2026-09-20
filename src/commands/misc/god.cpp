@@ -39,8 +39,9 @@ namespace primebds::commands {
         }
         auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
         std::string force = (args.size() > 1) ? args[1] : "";
+        int updated = 0;
         for (auto *t : targets) {
-            auto *p = dynamic_cast<endstone::Player *>(t);
+            auto *p = t->asPlayer();
             if (!p)
                 continue;
             bool enable;
@@ -58,8 +59,13 @@ namespace primebds::commands {
                 plugin.isgod.set(*p, false);
                 p->sendMessage("\u00a7cYou are no longer invulnerable");
             }
+            ++updated;
         }
-        sender.sendMessage("\u00a7eInvulnerability updated for " + std::to_string(targets.size()) + " players");
+        if (!updated) {
+            sender.sendMessage("No matching players were updated.");
+            return false;
+        }
+        sender.sendMessage("\u00a7eInvulnerability updated for " + std::to_string(updated) + " players");
         return true;
     }
 

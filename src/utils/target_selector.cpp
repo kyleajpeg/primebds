@@ -157,7 +157,7 @@ namespace primebds::utils {
         if (!parsed)
             return {};
 
-        auto *p_sender = dynamic_cast<endstone::Player *>(&origin);
+        auto *p_sender = origin.asPlayer();
         if (!p_sender)
             return {}; // Target selectors require a player context
 
@@ -217,7 +217,7 @@ namespace primebds::utils {
                                           endstone::CommandSender &origin) {
         auto actors = getMatchingActors(server, arg, origin);
         if (actors.size() == 1)
-            return dynamic_cast<endstone::Player *>(actors[0]);
+            return actors[0]->asPlayer();
         return nullptr;
     }
 

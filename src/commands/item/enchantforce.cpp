@@ -58,7 +58,7 @@ namespace primebds::commands {
 
         int success_count = 0;
         for (auto *t : targets) {
-            auto *p = dynamic_cast<endstone::Player *>(t);
+            auto *p = t->asPlayer();
             if (!p)
                 continue;
             auto held = p->getInventory().getItemInMainHand();

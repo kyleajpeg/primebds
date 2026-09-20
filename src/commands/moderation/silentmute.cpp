@@ -25,7 +25,7 @@ namespace primebds::commands {
 
         auto targets = utils::getMatchingActors(plugin.getServer(), args[0], sender);
         for (auto *t : targets) {
-            if (auto *p = dynamic_cast<endstone::Player *>(t)) {
+            if (auto *p = t->asPlayer()) {
                 auto it = plugin.silentmutes.find(p->getXuid());
                 if (it != plugin.silentmutes.end()) {
                     plugin.silentmutes.erase(it);

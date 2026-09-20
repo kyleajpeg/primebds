@@ -78,7 +78,7 @@ namespace primebds::commands {
             std::shuffle(targets.begin(), targets.end(), rng);
 
             for (auto *t : targets) {
-                auto *target = dynamic_cast<endstone::Player *>(t);
+                auto *target = t->asPlayer();
                 if (target && is_valid_spectate_target(target) && target != player) {
                     warp_player(player, target);
                     return true;

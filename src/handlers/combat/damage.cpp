@@ -33,7 +33,7 @@ namespace primebds::handlers::combat {
         }
 
         // God mode check (player only)
-        auto *player = dynamic_cast<endstone::Player *>(&entity);
+        auto *player = entity.asPlayer();
         if (player) {
             if (plugin.isgod.enabled(*player)) {
                 event.setCancelled(true);

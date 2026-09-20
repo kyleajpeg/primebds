@@ -41,7 +41,7 @@ namespace primebds::commands {
 
         if (!targets.empty()) {
             if (targets.size() == 1) {
-                auto *p = dynamic_cast<endstone::Player *>(targets[0]);
+                auto *p = targets[0]->asPlayer();
                 if (p) {
                     int ping = static_cast<int>(p->getPing().count());
                     sender.sendMessage("The ping of " + p->getName() + " is " +
@@ -50,7 +50,7 @@ namespace primebds::commands {
             } else {
                 std::string msg = "\u00a7bMatched Players' Pings:\n";
                 for (auto *t : targets) {
-                    auto *p = dynamic_cast<endstone::Player *>(t);
+                    auto *p = t->asPlayer();
                     if (p) {
                         int ping = static_cast<int>(p->getPing().count());
                         msg += "\u00a77- \u00a7r" + p->getName() + ": " +

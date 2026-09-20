@@ -99,6 +99,8 @@ if(PRIMEBDS_BUILD_TESTS)
     target_include_directories(activity_summary_test PRIVATE include)
     target_link_libraries(activity_summary_test PRIVATE sqlite3)
     add_test(NAME activity_summary COMMAND activity_summary_test)
+    add_test(NAME no_player_rtti COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${CMAKE_SOURCE_DIR} -P ${CMAKE_SOURCE_DIR}/tests/no_player_rtti.cmake)
 endif()
 
 # Copy plugin binary to output/ folder after build

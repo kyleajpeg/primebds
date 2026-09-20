@@ -24,14 +24,14 @@ namespace primebds::commands {
             : utils::getMatchingActors(plugin.getServer(), request->target, sender);
         int count = 0;
         for (auto *actor : targets) {
-            auto *player = dynamic_cast<endstone::Player *>(actor);
+            auto *player = actor->asPlayer();
             if (!player) continue;
             using Mode = utils::SpeedRequest::Mode;
             auto mode = request->mode;
             if (mode == Mode::Automatic) mode = player->isFlying() ? Mode::Fly : Mode::Walk;
-            if (mode == Mode::Walk || mode == Mode::Both)
+            if (!request->query && (mode == Mode::Walk || mode == Mode::Both))
                 player->setWalkSpeed(request->reset ? 0.1f : request->value);
-            if (mode == Mode::Fly || mode == Mode::Both)
+            if (!request->query && (mode == Mode::Fly || mode == Mode::Both))
                 player->setFlySpeed(request->reset ? 0.05f : request->value);
             sender.sendMessage(player->getName() + ": walkspeed=" + std::to_string(player->getWalkSpeed()) +
                                ", flyspeed=" + std::to_string(player->getFlySpeed()));
