@@ -165,7 +165,7 @@ namespace primebds::commands {
                 }
             }
             const bool changed = hierarchy::lower(hierarchy::rankOf(user->internal_rank).name) != hierarchy::lower(key);
-            if (changed) plugin.db->assignRank(user->xuid, key, plugin.savedPermissions(user->xuid, key));
+            if (changed) plugin.db->assignRank(user->xuid, key);
             pm.invalidatePermCache(user->xuid);
             pm.clearPrefixSuffixCache();
             if (target) {
@@ -174,7 +174,6 @@ namespace primebds::commands {
                     sender.sendMessage("Rank saved; permission synchronization is pending. Reconnect the player.");
                     return false;
                 }
-                if (changed) plugin.reconcilePlayerState(*target);
             }
             sender.sendMessage("\u00a7e" + player_name + " \u00a7arank set to \u00a7e" + key + (target ? "" : " (offline; gameplay changes apply on reconnect)"));
             return true;

@@ -1,5 +1,5 @@
 /// @file god.cpp
-/// Toggles invulnerability!
+/// Toggle invulnerability with full health and hunger!
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
@@ -10,12 +10,12 @@ namespace primebds::commands {
     static bool cmd_god(PrimeBDS &, endstone::CommandSender &,
                         const std::vector<std::string> &);
 
-    REGISTER_COMMAND(god, "Toggles invulnerability!", cmd_god,
+    REGISTER_COMMAND(god, "Toggle invulnerability with full health and hunger!", cmd_god,
                      info.usages = {"/god [player: player] [toggle: bool]"};
                      info.permissions = {"primebds.command.god", "primebds.command.god.other"};
                      info.default_permission = "op";);
 
-    /// Toggles invulnerability!
+    /// Toggle invulnerability with full health and hunger!
     static bool cmd_god(PrimeBDS &plugin, endstone::CommandSender &sender,
                         const std::vector<std::string> &args) {
         if (args.empty()) {
@@ -29,7 +29,8 @@ namespace primebds::commands {
                 player->sendMessage("\u00a7cYou are no longer invulnerable");
             } else {
                 plugin.isgod.set(*player, true);
-                player->sendMessage("\u00a7aYou are now invulnerable");
+                plugin.maintainGodMode(*player);
+                player->sendMessage("\u00a7aGod mode enabled: invulnerable, with health and hunger kept full");
             }
             return true;
         }
@@ -54,7 +55,8 @@ namespace primebds::commands {
 
             if (enable) {
                 plugin.isgod.set(*p, true);
-                p->sendMessage("\u00a7aYou are now invulnerable");
+                plugin.maintainGodMode(*p);
+                p->sendMessage("\u00a7aGod mode enabled: invulnerable, with health and hunger kept full");
             } else {
                 plugin.isgod.set(*p, false);
                 p->sendMessage("\u00a7cYou are no longer invulnerable");

@@ -51,7 +51,8 @@ namespace primebds {
         // Re-apply custom permissions for a player
         bool reloadCustomPerms(endstone::Player &player);
         std::map<std::string, bool> savedPermissions(const std::string &xuid, const std::string &rank);
-        void reconcilePlayerState(endstone::Player &player, int revoked = 0);
+        void reconcilePlayerState(endstone::Player &player);
+        void maintainGodMode(endstone::Player &player, bool refill_hunger = true);
         std::set<std::string> permissions_pending;
 
         // Check for stale sessions from unclean shutdown
@@ -97,6 +98,8 @@ namespace primebds {
         utils::IntervalManager afk_interval;
 
     private:
+        int god_maintenance_task_ = -1;
+        std::set<std::string> god_feed_failures_;
         std::unique_ptr<EventListener> listener_;
     };
 

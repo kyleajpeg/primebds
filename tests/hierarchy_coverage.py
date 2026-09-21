@@ -35,6 +35,6 @@ assert '.permissions("primebds.command.warnings")' in staff_help
 assert 'primebds.command.warnings.self' not in staff_help
 rank = (root/'src/commands/server/rank.cpp').read_text(encoding='utf-8')
 assert 'hierarchy::rankOf(user->internal_rank), destination' in rank
-assert 'assignRank(user->xuid, key, plugin.savedPermissions(user->xuid, key))' in rank
+assert 'assignRank(user->xuid, key)' in rank
 assert 'not found online' not in rank
 print('Personal warning help, staff permission, and offline rank guard wiring checked.')

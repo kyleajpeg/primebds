@@ -1,10 +1,12 @@
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
 #include "primebds/utils/target_selector.h"
+#include <iomanip>
+#include <sstream>
 
 namespace primebds::commands {
     static bool cmd_speed(PrimeBDS &, endstone::CommandSender &, const std::vector<std::string> &);
-    REGISTER_COMMAND(speed, "Modifies player flyspeed or walkspeed!", cmd_speed,
+    REGISTER_COMMAND(speed, "Set walk/fly speed multipliers (1 = normal)!", cmd_speed,
         info.usages = utils::speedUsages();
         info.permissions = {"primebds.command.speed"};);
 
@@ -12,7 +14,7 @@ namespace primebds::commands {
                           const std::vector<std::string> &args) {
         const auto request = utils::parseSpeed(args);
         if (!request) {
-            sender.sendMessage("Usage: /speed <nonnegative value> [player] | /speed <walkspeed|flyspeed> <value> [player] | /speed reset [walkspeed|flyspeed|player] [player]");
+            sender.sendMessage("Usage: /speed <nonnegative multiplier> [player] | /speed <walkspeed|flyspeed> <multiplier> [player] | /speed reset [walkspeed|flyspeed|player] [player]");
             return false;
         }
         auto *self = sender.asPlayer();
@@ -30,11 +32,14 @@ namespace primebds::commands {
             auto mode = request->mode;
             if (mode == Mode::Automatic) mode = player->isFlying() ? Mode::Fly : Mode::Walk;
             if (!request->query && (mode == Mode::Walk || mode == Mode::Both))
-                player->setWalkSpeed(request->reset ? 0.1f : request->value);
+                player->setWalkSpeed(utils::rawSpeed(request->reset ? 1.0f : request->value, false));
             if (!request->query && (mode == Mode::Fly || mode == Mode::Both))
-                player->setFlySpeed(request->reset ? 0.05f : request->value);
-            sender.sendMessage(player->getName() + ": walkspeed=" + std::to_string(player->getWalkSpeed()) +
-                               ", flyspeed=" + std::to_string(player->getFlySpeed()));
+                player->setFlySpeed(utils::rawSpeed(request->reset ? 1.0f : request->value, true));
+            std::ostringstream message;
+            message << std::setprecision(6) << player->getName() << ": walkspeed="
+                    << utils::speedMultiplier(player->getWalkSpeed(), false) << "x, flyspeed="
+                    << utils::speedMultiplier(player->getFlySpeed(), true) << "x";
+            sender.sendMessage(message.str());
             ++count;
         }
         if (!count) sender.sendMessage("No matching players found.");

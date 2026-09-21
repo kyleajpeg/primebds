@@ -21,14 +21,33 @@ public:
         if (enabled) players_.insert(id);
         else players_.erase(id);
     }
+    bool empty() const { return players_.empty(); }
 private:
     std::set<std::string> players_;
 };
 
+// A short saturation pulse is supplied by the caller through the public command API.
+// Health is restored to this player's actual maximum; never revive dead actors.
+template <typename Player, typename Feed>
+bool maintainGodVitals(const GodModeState &state, Player &player, Feed feed, bool refill_hunger = true) {
+    if (!state.enabled(player) || !player.isValid() || player.getHealth() <= 0) return false;
+    if (player.getHealth() < player.getMaxHealth()) player.setHealth(player.getMaxHealth());
+    if (refill_hunger) feed();
+    return true;
+}
+inline constexpr float NormalWalkSpeed = 0.1f;
+inline constexpr float NormalFlySpeed = 0.05f;
+inline float rawSpeed(float multiplier, bool flying) {
+    return multiplier * (flying ? NormalFlySpeed : NormalWalkSpeed);
+}
+inline float speedMultiplier(float raw, bool flying) {
+    return raw / (flying ? NormalFlySpeed : NormalWalkSpeed);
+}
+
 inline std::vector<std::string> speedUsages() {
     return {
-        "/speed [value: float] [player: string]",
-        "/speed (flyspeed|walkspeed)<mode: speed_mode> <value: float> [player: string]",
+        "/speed [multiplier: float] [player: string]",
+        "/speed (flyspeed|walkspeed)<mode: speed_mode> <multiplier: float> [player: string]",
         "/speed (reset)<action: speed_action> [type_or_player: string] [player: string]"};
 }
 inline std::vector<std::string> nicknameUsages() {

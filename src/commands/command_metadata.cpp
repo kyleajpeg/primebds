@@ -371,7 +371,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .permissions("primebds.command.feed", "primebds.command.feed.other")
         .aliases("eat");
 
-    cmd(b, "god").description("Toggles invulnerability!")
+    cmd(b, "god").description("Toggle invulnerability with full health and hunger!")
         .usages("/god [player: player] [toggle: bool]")
         .permissions("primebds.command.god", "primebds.command.god.other");
 
@@ -537,7 +537,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .usages("/spawn")
         .permissions("primebds.command.spawn");
 
-    cmd(b, "speed").description("Modifies player flyspeed or walkspeed!")
+    cmd(b, "speed").description("Set walk/fly speed multipliers (1 = normal)!")
         .usages(utils::speedUsages())
         .permissions("primebds.command.speed");
 

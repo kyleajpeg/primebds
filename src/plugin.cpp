@@ -1,3 +1,4 @@
+#include <endstone/command/command_sender_wrapper.h>
 #include "primebds/plugin.h"
 #include "primebds/commands/command_registry.h"
 #include "primebds/utils/config/config_manager.h"
@@ -82,11 +83,24 @@ namespace primebds {
 
         // Check for inactive sessions from unclean shutdown
         checkForInactiveSessions();
+        // Main-thread maintenance: no retained player pointers, no async game access.
+        auto task = getServer().getScheduler().runTaskTimer(*this, [this, tick = 0u]() mutable {
+            const bool feed = (++tick % 10u) == 0;
+            if (isgod.empty()) return;
+            for (auto *player : getServer().getOnlinePlayers())
+                if (player) maintainGodMode(*player, feed);
+        }, 1, 1);
+        if (task) god_maintenance_task_ = task->getTaskId();
+        else getLogger().error("Could not start god-mode health/hunger maintenance.");
     }
 
     void PrimeBDS::onDisable() {
         getLogger().info("PrimeBDS v{} disabled.", getDescription().getVersion());
 
+        if (god_maintenance_task_ >= 0) {
+            getServer().getScheduler().cancelTask(god_maintenance_task_);
+            god_maintenance_task_ = -1;
+        }
         // End all active sessions
         for (auto *player : getServer().getOnlinePlayers()) {
             sldb->endSession(player->getXuid());
@@ -131,13 +145,27 @@ namespace primebds {
         return false;
     }
 
-    void PrimeBDS::reconcilePlayerState(endstone::Player &player, int revoked) {
+    void PrimeBDS::maintainGodMode(endstone::Player &player, bool refill_hunger) {
+        utils::maintainGodVitals(isgod, player, [&]() {
+            // Wrapper suppresses recurring success feedback without changing global gamerules.
+            bool error = false;
+            endstone::CommandSenderWrapper quiet(getServer().getCommandSender(), {},
+                [&](const endstone::Message &) { error = true; });
+            const bool success = getServer().dispatchCommand(quiet, utils::feedCommand(player.getName()));
+            if (!success || error) {
+                if (god_feed_failures_.insert(player.getUniqueId().str()).second)
+                    getLogger().error("God-mode hunger refill failed for {}; check effect command availability.", player.getName());
+            } else god_feed_failures_.erase(player.getUniqueId().str());
+        }, refill_hunger);
+    }
+
+    void PrimeBDS::reconcilePlayerState(endstone::Player &player) {
         const auto has = [&](const std::string &node) { return player.hasPermission("primebds.command." + node); };
         std::map<std::string, bool> preferences;
         for (const auto *node : {"msgtoggle", "socialspy", "modspy", "altspy", "staffchat", "afk"})
             preferences["primebds.command." + std::string(node)] = has(node);
         db->resetUnavailableSettings(player.getXuid(), preferences);
-        if ((revoked & utils::GodReset) || (!has("god") && !has("god.other"))) isgod.set(player, false);
+        if (!has("god") && !has("god.other")) isgod.set(player, false);
         if (!has("afk")) afk_cache.erase(player.getXuid());
         for (auto *intervals : {&monitor_intervals, &blockscan_intervals}) {
             const auto node = intervals == &monitor_intervals ? "monitor" : "blockscan";
@@ -153,21 +181,21 @@ namespace primebds {
         const bool was_flying = player.isFlying();
         const auto walk_speed = player.getWalkSpeed();
         const auto fly_speed = player.getFlySpeed();
-        if (utils::modeWasRevoked(static_cast<int>(mode), revoked) || !utils::mayKeepGameMode(static_cast<int>(mode), [&](const std::string &node) {
+        if (!utils::mayKeepGameMode(static_cast<int>(mode), [&](const std::string &node) {
                 return player.hasPermission(node);
             })) player.setGameMode(endstone::GameMode::Survival);
         const auto current_mode = player.getGameMode();
-        if (((revoked & utils::FlightReset) || !has("fly")) && current_mode != endstone::GameMode::Creative &&
+        if (!has("fly") && current_mode != endstone::GameMode::Creative &&
             current_mode != endstone::GameMode::Spectator) {
             player.setFlying(false);
             player.setAllowFlight(false);
-        } else if (!(revoked & utils::FlightReset) && has("fly") && mode != current_mode) {
+        } else if (has("fly") && mode != current_mode) {
             player.setAllowFlight(allowed_flight);
             player.setFlying(allowed_flight && was_flying);
         }
-        player.setWalkSpeed(!(revoked & utils::SpeedReset) && has("speed") ? walk_speed : 0.1f);
-        player.setFlySpeed(!(revoked & utils::SpeedReset) && has("speed") ? fly_speed : 0.05f);
-        if ((revoked & utils::NicknameReset) || (!has("nickname") && !has("nickname.other"))) player.setNameTag(player.getName());
+        player.setWalkSpeed(has("speed") ? walk_speed : utils::NormalWalkSpeed);
+        player.setFlySpeed(has("speed") ? fly_speed : utils::NormalFlySpeed);
+        if (!has("nickname") && !has("nickname.other")) player.setNameTag(player.getName());
     }
 
     std::map<std::string, bool> PrimeBDS::savedPermissions(const std::string &xuid, const std::string &rank) {
@@ -276,7 +304,7 @@ namespace primebds {
         pm.invalidatePermCache(player.getXuid());
         const int pending = db->pendingStateReset(player.getXuid());
         if (pending) {
-            reconcilePlayerState(player, pending);
+            reconcilePlayerState(player);
             db->clearPendingStateReset(player.getXuid());
         }
         permissions_pending.erase(player.getXuid());
@@ -382,7 +410,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.8", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.9", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

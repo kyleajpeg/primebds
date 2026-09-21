@@ -2,7 +2,6 @@
 /// User database implementation.
 
 #include "primebds/utils/database/user_db.h"
-#include "primebds/utils/player_state_policy.h"
 
 #include <nlohmann/json.hpp>
 #include <ctime>
@@ -682,24 +681,10 @@ namespace primebds::db {
         invalidateUserCache(xuid);
     }
 
-    // One statement atomically commits rank, preference revocations, and reconnect work.
-    // OR preserves intermediate revocations if someone is demoted then promoted offline.
-    void UserDB::assignRank(const std::string &xuid, const std::string &rank,
-                            const std::map<std::string, bool> &permissions) {
-        const auto has = [&](const std::string &node) {
-            const auto found = permissions.find(node);
-            return found != permissions.end() && found->second;
-        };
-        const auto flag = [&](const std::string &node) { return has("primebds.command." + node) ? "1" : "0"; };
-        execute("UPDATE users SET internal_rank = ?, pending_state_reset = pending_state_reset | ?, "
-            "enabled_mt = CASE WHEN ? THEN enabled_mt ELSE 1 END, "
-            "enabled_ss = CASE WHEN ? THEN enabled_ss ELSE 0 END, "
-            "enabled_ms = CASE WHEN ? THEN enabled_ms ELSE 0 END, "
-            "enabled_as = CASE WHEN ? THEN enabled_as ELSE 0 END, "
-            "enabled_sc = CASE WHEN ? THEN enabled_sc ELSE 0 END, "
-            "is_afk = CASE WHEN ? THEN is_afk ELSE 0 END WHERE xuid = ?",
-            {rank, std::to_string(utils::unavailableState(has)), flag("msgtoggle"), flag("socialspy"),
-             flag("modspy"), flag("altspy"), flag("staffchat"), flag("afk"), xuid});
+    // Preserve offline preferences. The next successful permission sync reconciles
+    // against the latest saved rank, never intermediate offline assignments.
+    void UserDB::assignRank(const std::string &xuid, const std::string &rank) {
+        execute("UPDATE users SET internal_rank = ?, pending_state_reset = 1 WHERE xuid = ?", {rank, xuid});
         invalidateUserCache(xuid);
     }
     int UserDB::pendingStateReset(const std::string &xuid) {

@@ -65,39 +65,60 @@ int main() {
         {
             db::UserDB database(path);
             database.saveUser("offline","offline-uuid","Offline Player",1,"os","device",1,"version");
-            database.setUserRank("offline","Owner");
+            database.setUserRank("offline","Admin");
             database.updateUser("offline","enabled_ss","1");
             database.updateUser("offline","enabled_ms","1");
-            check(database.getUserByName("OFFLINE PLAYER")->xuid == "offline", "Offline name lookup ignores case and preserves XUID");
-            std::map<std::string,bool> retained;
-            for (const auto *node : {"gmc","gma","gmsp","fly","speed","nickname","god","socialspy"})
-                retained["primebds.command." + std::string(node)] = true;
-            database.assignRank("offline","Admin",retained);
+            database.updateUser("offline","enabled_mt","0");
+            check(database.getUserByName("OFFLINE PLAYER")->xuid == "offline", "Case-insensitive saved identity");
+            database.assignRank("offline","Default");
             auto user=database.getUserByName("offline player");
-            check(user && user->internal_rank == "Admin" && user->enabled_ss && !user->enabled_ms,
-                "Offline assignment updates cached identity and only revoked preferences");
-            check(database.pendingStateReset("offline") == 0, "Retained gameplay permissions do not enqueue resets");
-            database.assignRank("offline","Default",{});
-            check(database.pendingStateReset("offline") & utils::SpeedReset, "Offline demotion queues speed reset");
-            check(!database.getOnlineUser("offline")->enabled_ss, "Offline demotion clears spies immediately");
-            const auto pending=database.pendingStateReset("offline");
-            database.assignRank("offline","Owner",retained);
-            check(database.pendingStateReset("offline") == pending && !database.getOnlineUser("offline")->enabled_ss,
-                "Offline re-promotion cannot resurrect preferences or discard pending gameplay revocations");
+            check(user && user->internal_rank == "Default" && user->enabled_ss && user->enabled_ms && !user->enabled_mt,
+                "Offline demotion changes authority immediately but preserves preferences until reconnect");
+            check(database.pendingStateReset("offline") != 0, "Reconnect reconciliation survives offline changes");
+        }
+        {
+            db::UserDB database(path);
+            database.assignRank("offline","Admin");
+            database.assignRank("offline","Default");
+            database.assignRank("offline","Admin");
+            check(database.getOnlineUser("offline")->enabled_ss && database.getOnlineUser("offline")->enabled_ms,
+                "Intermediate offline ranks cannot erase saved toggles, including across restart");
             database.saveUser("offline","offline-uuid","Renamed Player",1,"os","device",1,"version");
-            check(database.getOnlineUser("offline")->internal_rank == "Owner" && database.pendingStateReset("offline") == pending,
-                "Returning-player save preserves offline rank changes and pending revocations");
-            check(!database.getUserByName("Never Joined"), "Unknown players are not fabricated");
+            check(database.getOnlineUser("offline")->internal_rank == "Admin" && database.pendingStateReset("offline"),
+                "Reconnect save preserves the final rank and reconciliation flag");
         }
         {
             db::UserDB reopened(path);
-            const auto pending=reopened.pendingStateReset("offline");
-            check((pending & utils::SpeedReset) && utils::modeWasRevoked(1,pending), "Offline gameplay revocations survive restart");
-            check(!reopened.getOnlineUser("offline")->enabled_ss, "Offline spy revocation survives restart");
+            std::map<std::string,bool> finalPermissions{{"primebds.command.socialspy",true},
+                {"primebds.command.modspy",true}, {"primebds.command.msgtoggle",true},
+                {"primebds.command.gmc",true}, {"primebds.command.speed",true}};
+            // Same preference reconciliation invoked after live permissions load.
+            reopened.resetUnavailableSettings("offline",finalPermissions);
+            auto user=reopened.getOnlineUser("offline");
+            check(user->enabled_ss && user->enabled_ms && !user->enabled_mt,
+                "Final permitted rank preserves original spies and PM opt-out");
+            auto has=[&](const std::string &node){return finalPermissions[node];};
+            check(utils::mayKeepGameMode(1,has), "Final creative grant preserves mode regardless of intermediate ranks");
             reopened.clearPendingStateReset("offline");
-            check(reopened.pendingStateReset("offline") == 0, "Acknowledged reconnect reset is consumed only once");
-            check(!reopened.getOnlineUser("one")->enabled_ss, "Revocation survives restart");
-            check(reopened.getWarnings("one").size()==3, "Warnings survive repeated migration/startup");
+            check(!reopened.pendingStateReset("offline"), "Successful reconciliation acknowledged once");
+            // A final demotion still revokes on reconnect, rather than revoking at assignment time.
+            reopened.assignRank("offline","Moderator");
+            check(reopened.getOnlineUser("offline")->enabled_ms, "Partial demotion deferred while offline");
+            finalPermissions["primebds.command.modspy"]=false;
+            reopened.resetUnavailableSettings("offline",finalPermissions);
+            user=reopened.getOnlineUser("offline");
+            check(user->enabled_ss && !user->enabled_ms, "Only settings absent from the final rank reset");
+            reopened.assignRank("offline","Default");
+            reopened.resetUnavailableSettings("offline",{});
+            user=reopened.getOnlineUser("offline");
+            check(!user->enabled_ss && user->enabled_mt, "Final Default resets spies and restores default PM preference");
+            // A pre-.9 pending bit mask is now only a flag, never a list of forced revocations.
+            reopened.execute("UPDATE users SET pending_state_reset = 127 WHERE xuid = ?", {"offline"});
+            reopened.assignRank("offline","Owner");
+            check(reopened.pendingStateReset("offline") == 1, "Latest assignment replaces legacy accumulated revocation masks");
+            check(!reopened.getOnlineUser("one")->enabled_ss, "Previously applied online revocations remain applied");
+            check(reopened.getWarnings("one").size()==3, "Warnings survive repeated startup");
+            check(!reopened.getUserByName("Never Joined"), "Unknown players are not fabricated");
         }
         std::map<std::string,bool> grouped{{"primebds.command",true}, {"primebds.command.speed",false},
             {"primebds.minecraft.op",false}, {"minecraft.command",true}, {"minecraft.command.op",false}};

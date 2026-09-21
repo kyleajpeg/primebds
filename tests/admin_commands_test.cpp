@@ -9,6 +9,12 @@ static void check(bool value, const char *message) {
 struct FakeUuid { std::string value; std::string str() const { return value; } };
 struct FakePlayer {
     FakeUuid uuid; int runtime_id;
+    int health = 4, maximum = 40, hunger = 3;
+    bool valid = true;
+    bool isValid() const { return valid; }
+    int getHealth() const { return health; }
+    int getMaxHealth() const { return maximum; }
+    void setHealth(int value) { health = value; }
     FakeUuid getUniqueId() const { return uuid; }
     int getRuntimeId() const { return runtime_id; }
 };
@@ -24,6 +30,35 @@ int main() {
         god.set(respawn, false);
         check(!god.enabled(original), "Disable and leave clear UUID state");
 
+        int pulses = 0;
+        auto feed = [&]() { original.hunger = 20; ++pulses; };
+        god.set(original, true);
+        check(maintainGodVitals(god, original, feed) && original.health == 40 && original.hunger == 20 && pulses == 1,
+            "God enable restores actual max health and refills hunger");
+        original.health = 7; original.hunger = 12;
+        maintainGodVitals(god, original, feed);
+        check(original.health == 40 && original.hunger == 20 && pulses == 2, "Repeated maintenance keeps bars full");
+        original.health = 11;
+        maintainGodVitals(god, original, feed, false);
+        check(original.health == 40 && pulses == 2, "Health checked every tick without feeding every tick");
+        god.set(original, false);
+        original.health = 5; original.hunger = 2;
+        check(!maintainGodVitals(god, original, feed) && original.health == 5 && original.hunger == 2,
+            "Disable or permission revocation stops both refills");
+        god.set(original, true); original.health = 0;
+        check(!maintainGodVitals(god, original, feed) && original.health == 0, "Maintenance never resurrects dead actors");
+        original.health = 4; original.valid = false;
+        check(!maintainGodVitals(god, original, feed), "Disconnected actor not modified");
+        original.valid = true;
+        for (float multiplier : {0.0f,0.5f,1.0f,1.5f,2.0f,3.0f}) {
+            check(std::abs(rawSpeed(multiplier,false) - 0.1f*multiplier) < 0.000001f, "Walk multiplier API conversion");
+            check(std::abs(rawSpeed(multiplier,true) - 0.05f*multiplier) < 0.000001f, "Fly multiplier API conversion");
+            check(std::abs(speedMultiplier(rawSpeed(multiplier,false),false) - multiplier) < 0.000001f,
+                "Reported multiplier matches requested value");
+        }
+        check(rawSpeed(1,false) == NormalWalkSpeed && rawSpeed(1,true) == NormalFlySpeed,
+            "Reset and multiplier 1 have identical normal speed");
+
         using Mode = SpeedRequest::Mode;
         const auto reset = parseSpeed({"reset"});
         check(reset && reset->reset && reset->mode == Mode::Both && reset->target.empty(), "Bare reset restores both speeds");
@@ -33,8 +68,8 @@ int main() {
         check(walk && walk->reset && walk->mode == Mode::Walk && walk->target == "Alice", "Mode-first reset");
         const auto fly = parseSpeed({"reset", "flyspeed", "Alice"});
         check(fly && fly->reset && fly->mode == Mode::Fly && fly->target == "Alice", "Reset-first mode");
-        const auto value = parseSpeed({"walkspeed", "0.1", "Alice"});
-        check(value && !value->reset && value->value == 0.1f, "Explicit speed value");
+        const auto value = parseSpeed({"walkspeed", "1.5", "Alice"});
+        check(value && !value->reset && value->value == 1.5f, "Fractional speed multiplier");
         const auto shorthand = parseSpeed({"2","Il Gallon lI"});
         check(shorthand && shorthand->target == "Il Gallon lI" && shorthand->value == 2, "Targeted numeric shorthand with spaced gamertag");
         const auto targetedFly = parseSpeed({"flyspeed","2","Il Gallon lI"});

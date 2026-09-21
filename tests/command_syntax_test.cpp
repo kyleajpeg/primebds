@@ -18,7 +18,7 @@ int main() {
             const auto &p = parsed->parameters;
             check(!p.empty(), "Missing speed arguments");
             if (p[0].is_enum && std::find(p[0].values.begin(),p[0].values.end(),"walkspeed") != p[0].values.end()) {
-                check(p.size() == 3 && p[1].type == "float" && !p[1].optional, "Numeric mode value must be a required Bedrock float, not an identifier");
+                check(p.size() == 3 && p[1].type == "float" && p[1].name == "multiplier" && !p[1].optional, "Numeric mode value must be a required Bedrock float, not an identifier");
                 check(p[2].optional && p[2].type == "string", "Target remains optional");
                 for (const auto &value : p[0].values) check(mode_values.insert(value).second, "Duplicate mode autocomplete entries");
                 ++numeric_modes;

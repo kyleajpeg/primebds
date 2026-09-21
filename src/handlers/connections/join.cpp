@@ -69,8 +69,14 @@ namespace primebds::handlers::connections {
         // Reload custom permissions on the next tick. Capture UUID by value and
         // re-resolve the player so a fast disconnect cannot leave us with a
         // dangling reference (which previously surfaced as std::bad_alloc).
-        // Revoke stale native OP while the saved rank is being synchronized.
-        if (plugin.db->pendingStateReset(xuid) && player.isOp()) player.setOp(false);
+        // Revoke stale native OP only if the final rank no longer grants it.
+        // An offline demotion corrected before login must not briefly deop the player.
+        if (plugin.db->pendingStateReset(xuid) && player.isOp()) {
+            auto user = plugin.db->getOnlineUser(xuid);
+            auto granted = plugin.savedPermissions(xuid, user ? user->internal_rank : "Default");
+            auto op = granted.find("primebds.minecraft.op");
+            if (op == granted.end() || !op->second) player.setOp(false);
+        }
         auto uuid = player.getUniqueId();
         plugin.getServer().getScheduler().runTask(plugin, [&plugin, uuid]() {
             auto *p = plugin.getServer().getPlayer(uuid);
