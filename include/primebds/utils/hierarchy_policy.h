@@ -108,7 +108,7 @@ inline std::optional<std::vector<std::string>> teleportTargets(std::vector<std::
     return offset ? std::vector<std::string>{args[0]} : std::vector<std::string>{};
 }
 
-enum class CommandPolicy { Deny, Ordinary, Selector, Named, Moderation, Owner, Rank, Permissions, Console };
+enum class CommandPolicy { Deny, Ordinary, Shared, Selector, Named, Moderation, Owner, Rank, Permissions, Console };
 inline CommandPolicy commandPolicy(const std::string &name) {
     static const std::map<std::string, CommandPolicy> policies = [] {
         std::map<std::string, CommandPolicy> p;
@@ -123,7 +123,9 @@ inline CommandPolicy commandPolicy(const std::string &name) {
         add(CommandPolicy::Selector, "gma gmc gms gmsp gmt enchantforce giveforce hat itemlore itemname itemtag repair bossbar popup feed god heal fly send");
         add(CommandPolicy::Named, "activity check alts homeother offlinetp permissionslist note");
         add(CommandPolicy::Moderation, "mute nameban nameunban permban punishments removeban silentmute tempban tempmute unmute unwarn warn staffwarnings");
-        add(CommandPolicy::Owner, "motd setrules setback sethomes setspawn warps primebds reloadscripts updatepacks");
+        // Explicitly delegable shared settings; no individual player target exists.
+        add(CommandPolicy::Shared, "motd setrules sethomes setspawn warps");
+        add(CommandPolicy::Owner, "setback primebds reloadscripts updatepacks");
         add(CommandPolicy::Console, "alist ipban ipmute");
         p.emplace("globalmute", CommandPolicy::Ordinary); // Scope and issuer checked inside the handler.
         p.emplace("rank", CommandPolicy::Rank);

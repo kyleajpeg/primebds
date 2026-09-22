@@ -16,6 +16,11 @@ int main() {
         grants.insert("primebds.command.rank.set");
         check(utils::mayUseRankAction(false,"info",has) && utils::mayUseRankAction(false,"set",has), "Independent delegated nodes");
         check(!utils::mayUseRankAction(false,"delete",has), "Delegated rank editing must be denied");
+        for (auto name : {"motd","setrules","sethomes","setspawn","warps"})
+            check(hierarchy::commandPolicy(name) == hierarchy::CommandPolicy::Shared, "Requested shared setting remains blocked");
+        for (auto name : {"primebds","reloadscripts","updatepacks"})
+            check(hierarchy::commandPolicy(name) == hierarchy::CommandPolicy::Owner, "Shared delegation leaked plugin/code management");
+        check(hierarchy::commandPolicy("permissions") == hierarchy::CommandPolicy::Permissions, "Shared delegation leaked per-player permission edits");
         check(utils::mayUseRankAction(true,"delete",has), "Owner full management retained");
         check(hierarchy::canAssign(co,member,admin,false,false), "Co-Owner may appoint Admin");
         check(!hierarchy::canAssign(admin,member,admin,false,false), "Admin cannot appoint a peer");

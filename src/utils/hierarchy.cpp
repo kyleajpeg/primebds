@@ -94,6 +94,7 @@ bool authorizePluginCommand(PrimeBDS &plugin, endstone::CommandSender &sender,
         return false;
     }
     if (name == "staffwarnings") return true; // Handler separates self-read from moderation.
+    if (policy == CommandPolicy::Shared) return true; // Normal command/subcommand permission gates still apply.
     if (policy == CommandPolicy::Rank) return true; // Checked again inside rank.cpp, including direct callers.
     if (policy == CommandPolicy::Named || policy == CommandPolicy::Moderation) {
         if (args.empty()) return true; // No side effects; handler prints usage.
