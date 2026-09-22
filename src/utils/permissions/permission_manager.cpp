@@ -114,6 +114,7 @@ namespace primebds::permissions {
             for (const auto &[name, registration] : CommandRegistry::instance().commands())
                 for (const auto &node : registration.info.permissions) all_perms.insert(toLower(node));
             for (const auto *node : {"primebds.command.rank.set", "primebds.command.fly.other",
+                                    "primebds.command.motd.set",
                                     "primebds.command.nickname.other", "primebds.globalmute.exempt",
                                     "primebds.exempt.back", "primebds.homes.exempt"}) all_perms.insert(node);
             for (auto &p : EXTRA_PERMS)

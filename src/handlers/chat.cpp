@@ -10,7 +10,7 @@
 #include "primebds/utils/permissions/permission_manager.h"
 #include "primebds/utils/hierarchy.h"
 #include "primebds/utils/rank_tools.h"
-#include <fmt/format.h>
+#include <format>
 
 #include <chrono>
 #include <regex>
@@ -137,7 +137,9 @@ namespace primebds::handlers {
         plugin.public_chat_event = &event;
         plugin.getServer().getPluginManager().callEvent(event);
         if (event.isCancelled()) return false;
-        const auto rendered = fmt::format(fmt::runtime(event.getFormat()), player.getNameTag(), event.getMessage());
+        const auto name = event.getPlayer().getNameTag();
+        const auto text = event.getMessage();
+        const auto rendered = std::vformat(event.getFormat(), std::make_format_args(name, text));
         for (auto *recipient : event.getRecipients()) recipient->sendMessage(rendered);
         plugin.getLogger().info("{}", rendered);
         return true;
