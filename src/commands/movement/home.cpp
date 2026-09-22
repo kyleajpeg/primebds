@@ -3,6 +3,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/teleport.h"
 
 #include <algorithm>
 #include <ctime>
@@ -82,10 +83,7 @@ namespace primebds::commands {
                 return true;
             }
             auto &first = homes.begin()->second;
-            auto pos = db::ServerDB::decodeLocation(first.pos);
-            player->teleport(endstone::Location(
-                player->getDimension(),
-                pos["x"].get<double>(), pos["y"].get<double>(), pos["z"].get<double>()));
+            if (!utils::teleportSaved(plugin, *player, first.pos)) return true;
             player->sendMessage("\u00a7aWarped to \u00a7e" + homes.begin()->first);
             home_cooldowns[player->getXuid()] = now;
             return true;
@@ -133,10 +131,7 @@ namespace primebds::commands {
                 sender.sendMessage("\u00a7cHome \u00a7e" + name + " \u00a7cdoes not exist");
                 return true;
             }
-            auto pos = db::ServerDB::decodeLocation(it->second.pos);
-            player->teleport(endstone::Location(
-                player->getDimension(),
-                pos["x"].get<double>(), pos["y"].get<double>(), pos["z"].get<double>()));
+            if (!utils::teleportSaved(plugin, *player, it->second.pos)) return true;
             player->sendMessage("\u00a7aWarped to \u00a7e" + name);
             home_cooldowns[player->getXuid()] = now;
             return true;

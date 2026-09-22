@@ -9,6 +9,11 @@ int main() {
                               admin{"Admin",50}, mod{"Moderator",25}, member{"Default",0};
         std::set<std::string> grants{"primebds.command.rank.list"};
         auto has = [&](const std::string &node) { return grants.contains(node); };
+        for (const auto *allowed : {"set","list","info"}) {
+            auto single = [&](const std::string &node) { return node == "primebds.command.rank." + std::string(allowed); };
+            for (const auto *action : {"set","list","info","create","delete","perm"})
+                check(utils::mayUseRankAction(false,action,single)==(std::string(action)==allowed), "Each delegated rank node must work independently without sibling grants");
+        }
         check(utils::mayUseRankAction(false,"list",has), "List-only delegation must work");
         for (auto action : {"set","info","create","delete","perm","inherit","weight","prefix","suffix",""})
             check(!utils::mayUseRankAction(false,action,has), "Read delegation leaked another subcommand");
@@ -31,12 +36,22 @@ int main() {
         check(!utils::globalMuteAffects(admin,co,admin), "Promotion broadened existing mute");
         check(!utils::globalMuteAffects(co,admin,admin), "Demotion did not narrow existing mute");
         check(!utils::globalMuteAffects(admin,admin,{"Missing",std::nullopt}), "Unknown ranks are protected");
-        check(utils::mayLiftGlobalMute(false,true,false,admin,admin), "Issuer can undo own mute");
-        check(!utils::mayLiftGlobalMute(false,false,false,admin,admin), "Peer can lift another peer's mute");
-        check(!utils::mayLiftGlobalMute(false,false,false,admin,co), "Lower rank can lift higher mute");
-        check(utils::mayLiftGlobalMute(false,false,false,co,admin), "Higher staff can lift lower mute");
-        check(!utils::mayLiftGlobalMute(false,false,true,co,admin), "Console mute bypassed");
-        check(utils::mayLiftGlobalMute(true,false,true,owner,owner), "Owner recovery bypass retained");
+        check(utils::mayManageGlobalMute(false,true), "Permission holders can lift any issuer's mute, including peers, Owner or console");
+        check(!utils::mayManageGlobalMute(false,false), "Players without the grant cannot toggle global mute");
+        check(utils::mayManageGlobalMute(true,false), "Console retains control");
+        check(utils::globalMuteExempt(true,false,false), "Global mute grant allows chat regardless of issuer");
+        check(utils::globalMuteExempt(false,true,false) && utils::globalMuteExempt(false,false,true), "Existing exemptions retained");
+        check(!utils::globalMuteExempt(false,false,false), "Ordinary players remain subject to scope");
+        std::vector<hierarchy::Rank> ordered{member,admin,owner,mod,co,op,{"zUnknown",{}},{"aUnknown",{}},{"Builder",25},{"alpha",25}};
+        utils::sortRanks(ordered);
+        std::vector<std::string> names;
+        for (const auto &rank : ordered) names.push_back(rank.name);
+        check(names == std::vector<std::string>{"Owner","Operator","Co-Owner","Admin","alpha","Builder","Moderator","Default","aUnknown","zUnknown"}, "Descending numeric weights, case-insensitive ties, unknowns last");
+        auto first = utils::rankPage(21,1), second = utils::rankPage(21,2), last = utils::rankPage(21,3);
+        check(first && first->begin==0 && first->end==10 && first->pages==3, "First sorted page");
+        check(second && second->begin==10 && second->end==20 && last && last->begin==20 && last->end==21, "Later sorted pages without missing or duplicate entries");
+        check(!utils::rankPage(21,4) && !utils::rankPage(21,0) && !utils::rankPage(21,2147483647), "Invalid/overflow pages rejected");
+        check(utils::rankPage(0,1)->end==0 && !utils::rankPage(0,2), "Empty rank list pagination");
         struct User { std::string xuid, name, internal_rank; };
         const std::vector<User> users{{"1","Alice","Admin"},{"2","Bob","admin"},
                                      {"3","Offline","FutureRank"},{"1","Duplicate","Admin"}};

@@ -4,6 +4,7 @@
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
 #include "primebds/utils/rank_tools.h"
+#include "primebds/utils/hierarchy.h"
 #include "primebds/utils/permissions/permission_manager.h"
 
 #include <algorithm>
@@ -43,8 +44,13 @@ namespace primebds::commands {
                 rank_names.push_back(name);
             const auto directory = utils::rankDirectory(rank_names, plugin.db->getAllUsers());
             if (filter == "ranks") {
-                for (const auto &[key, entry] : directory)
+                std::vector<hierarchy::Rank> ranks;
+                for (const auto &[key, entry] : directory) ranks.push_back(hierarchy::rankOf(entry.name));
+                utils::sortRanks(ranks);
+                for (const auto &rank : ranks) {
+                    const auto &entry = directory.at(hierarchy::lower(rank.name));
                     results.push_back(entry.name + ": " + std::to_string(entry.members.size()) + " player(s)");
+                }
                 sender.sendMessage("All saved players, including offline. Use /flist rank <rank> [page] for names.");
             } else {
                 if (args.size() < 2) { sender.sendMessage("Usage: /flist rank <rank> [page]"); return false; }

@@ -10,6 +10,14 @@ using endstone::core::CommandUsageParser;
 void check(bool ok, const char *why) { if (!ok) throw std::runtime_error(why); }
 int main() {
     try {
+        const auto rankset = CommandUsageParser(primebds::utils::rankSetUsages().at(0)).parse();
+        const auto ranklist = CommandUsageParser(primebds::utils::rankListUsages().at(0)).parse();
+        const auto rankinfo = CommandUsageParser(primebds::utils::rankInfoUsages().at(0)).parse();
+        check(rankset && rankset->parameters.size()==2 && rankset->parameters[0].type=="string" &&
+              rankset->parameters[1].type=="string" && !rankset->parameters[0].optional, "Rank assignment must accept offline names and rank names");
+        check(ranklist && ranklist->parameters.size()==1 && ranklist->parameters[0].type=="int" &&
+              ranklist->parameters[0].optional, "Rank listing optional page");
+        check(rankinfo && rankinfo->parameters.size()==1 && rankinfo->parameters[0].type=="string", "Rank info must not expose editing subcommands");
         int rank_forms = 0;
         for (const auto &usage : primebds::utils::filterListUsages()) {
             const auto parsed = CommandUsageParser(usage).parse();

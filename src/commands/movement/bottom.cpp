@@ -3,6 +3,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/teleport.h"
 
 namespace primebds::commands {
 
@@ -44,7 +45,7 @@ namespace primebds::commands {
             if (block->getType() != "minecraft:air" &&
                 above1->getType() == "minecraft:air" &&
                 above2->getType() == "minecraft:air") {
-                player->performCommand("tp " + std::to_string(x) + " " + std::to_string(y + 1) + " " + std::to_string(z));
+                if (!utils::teleportHere(plugin, *player, x, y + 1, z)) return true;
                 player->sendMessage("\u00a7aTeleported to the bottom");
                 return true;
             }

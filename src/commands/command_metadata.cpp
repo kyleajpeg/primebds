@@ -518,7 +518,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .permissions("primebds.command.homeother");
 
     cmd(b, "offlinetp").description("Teleport to where a player last logged out.")
-        .usages("/offlinetp <player: player>")
+        .usages("/offlinetp <player: string>")
         .permissions("primebds.command.offlinetp")
         .aliases("otp");
 
@@ -591,6 +591,13 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .usages("/primebds (config|command|info|reloadconfig)[action: pbds_action]")
         .permissions("primebds.command.primebds");
 
+    cmd(b, "rankset").description("Assign an existing rank to a player")
+        .usages(utils::rankSetUsages()).permissions("primebds.command.rank.set");
+    cmd(b, "ranklist").description("List ranks by descending weight")
+        .usages(utils::rankListUsages()).permissions("primebds.command.rank.list");
+    cmd(b, "rankinfo").description("Inspect a rank definition")
+        .usages(utils::rankInfoUsages()).permissions("primebds.command.rank.info");
+
     cmd(b, "rank").description("Manage server ranks!")
         .usages(
             "/rank (set)<sub: rank_sub> <player: string> <rank: string>",
@@ -603,7 +610,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
             "/rank (weight)<sub: rank_sub> <rank: string> <weight: int>",
             "/rank (prefix)<sub: rank_sub> <rank: string> <prefix: message>",
             "/rank (suffix)<sub: rank_sub> <rank: string> <suffix: message>")
-        .permissions("primebds.command.rank", "primebds.command.rank.set", "primebds.command.rank.list", "primebds.command.rank.info");
+        .permissions("primebds.command.rank");
 
     cmd(b, "reloadscripts").description("Reloads server scripts!")
         .usages("/reloadscripts")

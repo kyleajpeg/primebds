@@ -3,6 +3,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/teleport.h"
 
 #include <ctime>
 #include <map>
@@ -33,11 +34,6 @@ namespace primebds::commands {
             return false;
         }
 
-        auto pos = db::ServerDB::decodeLocation(spawn->pos);
-        double x = pos["x"].get<double>();
-        double y = pos["y"].get<double>();
-        double z = pos["z"].get<double>();
-
         double now = (double)std::time(nullptr);
         double cooldown_time = spawn->cooldown;
         auto it = spawn_cooldowns.find(player->getXuid());
@@ -49,7 +45,7 @@ namespace primebds::commands {
             return false;
         }
 
-        player->performCommand("tp " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z));
+        if (!utils::teleportSaved(plugin, *player, spawn->pos)) return true;
         player->sendMessage("\u00a7aYou have been warped to spawn!");
         spawn_cooldowns[player->getXuid()] = now;
         return true;

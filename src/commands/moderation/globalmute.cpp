@@ -18,15 +18,12 @@ namespace primebds::commands {
     /// Toggles global mute for the server!
     static bool cmd_globalmute(PrimeBDS &plugin, endstone::CommandSender &sender,
                                const std::vector<std::string> &args) {
+        if (!utils::mayManageGlobalMute(hierarchy::isConsole(plugin, sender), sender.hasPermission("primebds.command.globalmute"))) {
+            sender.sendMessage("You do not have permission to use this command"); return true;
+        }
         const auto authority = hierarchy::globalMuteAuthority(plugin);
         auto *player = sender.asPlayer();
         if (authority) {
-            const bool own = player && player->getXuid() == plugin.globalmute.issuer_xuid;
-            if (!utils::mayLiftGlobalMute(hierarchy::isAdministrator(plugin, sender), own,
-                    plugin.globalmute.console, hierarchy::playerRank(plugin, sender.getName()), *authority)) {
-                sender.sendMessage("You do not have permission to use this command");
-                return false;
-            }
             plugin.globalmute = {};
             plugin.getServer().broadcastMessage("\u00a7a\u00a7lGlobal mute has been disabled by " + sender.getName());
         } else {

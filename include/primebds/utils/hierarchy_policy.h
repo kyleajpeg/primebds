@@ -128,7 +128,7 @@ inline CommandPolicy commandPolicy(const std::string &name) {
         add(CommandPolicy::Owner, "setback primebds reloadscripts updatepacks");
         add(CommandPolicy::Console, "alist ipban ipmute");
         p.emplace("globalmute", CommandPolicy::Ordinary); // Scope and issuer checked inside the handler.
-        p.emplace("rank", CommandPolicy::Rank);
+        add(CommandPolicy::Rank, "rank rankset ranklist rankinfo");
         p.emplace("permissions", CommandPolicy::Permissions);
         return p;
     }();

@@ -3,6 +3,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/teleport.h"
 
 #include <ctime>
 #include <map>
@@ -73,11 +74,6 @@ namespace primebds::commands {
             return true;
         }
 
-        auto pos = db::ServerDB::decodeLocation(warp->pos);
-        double x = pos["x"].get<double>();
-        double y = pos["y"].get<double>();
-        double z = pos["z"].get<double>();
-
         // Check cooldown
         double now = (double)std::time(nullptr);
         bool exempt = player->hasPermission("primebds.exempt.warp.cooldowns");
@@ -90,7 +86,7 @@ namespace primebds::commands {
             return false;
         }
 
-        player->performCommand("tp " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z));
+        if (!utils::teleportSaved(plugin, *player, warp->pos)) return true;
         std::string display = warp->displayname.empty() ? warp->name : warp->displayname;
         player->sendMessage("\u00a7aWarped to \u00a7e" + display);
         warp_cooldowns[player->getXuid()] = now;

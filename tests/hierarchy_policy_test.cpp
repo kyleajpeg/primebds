@@ -52,6 +52,8 @@ int main() {
     check(!spyTargets("execute",{"as","Owner"},""),"indirect commands withheld from non-admin spies");
     check(!spyTargets("staffchat",{"staff message"},""),"staff channel withheld from non-admin command spies");
     check(spyTargets("speed",{"2","Owner"},"")->at(0)=="Owner","speed target included for privacy");
+    check(spyTargets("rankset",{"Owner","Default"},"")->at(0)=="Owner","delegated rank-set target included for privacy");
+    check(!spyTargets("rankset",{"Owner"},""),"malformed rank-set attempts fail closed for spies");
     check(spyTargets("warnings",{"2"},"")->empty(),"Personal warning page is not another player's identity");
     check(spyTargets("staffwarnings",{"Owner","delete","2"},"")->at(0)=="Owner","Staff warning recipient included for privacy");
     auto t=tokenize("/minecraft:gamemode creative \"Player With Spaces\"");

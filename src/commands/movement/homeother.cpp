@@ -3,6 +3,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/teleport.h"
 
 #include <ctime>
 #include <map>
@@ -63,10 +64,7 @@ namespace primebds::commands {
                 return true;
             }
             auto &first = homes.begin()->second;
-            auto pos = db::ServerDB::decodeLocation(first.pos);
-            player->performCommand("tp " + std::to_string(pos["x"].get<double>()) + " " +
-                                   std::to_string(pos["y"].get<double>()) + " " +
-                                   std::to_string(pos["z"].get<double>()));
+            if (!utils::teleportSaved(plugin, *player, first.pos)) return true;
             player->sendMessage("\u00a7aWarped to \u00a7e" + target_name + "'s " + homes.begin()->first);
             return true;
         }
@@ -89,10 +87,7 @@ namespace primebds::commands {
                 sender.sendMessage("\u00a7cHome \u00a7e" + name + " \u00a7cdoes not exist for \u00a7e" + target_name);
                 return true;
             }
-            auto pos = db::ServerDB::decodeLocation(it->second.pos);
-            player->performCommand("tp " + std::to_string(pos["x"].get<double>()) + " " +
-                                   std::to_string(pos["y"].get<double>()) + " " +
-                                   std::to_string(pos["z"].get<double>()));
+            if (!utils::teleportSaved(plugin, *player, it->second.pos)) return true;
             player->sendMessage("\u00a7aWarped to \u00a7e" + target_name + "'s " + name);
             return true;
         }

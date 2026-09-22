@@ -7,6 +7,7 @@
 #include "primebds/utils/spy_policy.h"
 #include "primebds/utils/command_audit.h"
 #include <set>
+#include <limits>
 
 namespace primebds::hierarchy {
 Rank rankOf(const std::string &name) {
@@ -15,6 +16,8 @@ Rank rankOf(const std::string &name) {
         if (lower(key) != lower(name)) continue;
         if (!value.is_object() || !value.contains("weight") || !value["weight"].is_number_integer())
             return {key, std::nullopt};
+        if (value["weight"].is_number_unsigned() && value["weight"].get<std::uint64_t>() >
+                static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) return {key, std::nullopt};
         try { return {key, value["weight"].get<std::int64_t>()}; }
         catch (...) { return {key, std::nullopt}; }
     }
@@ -50,9 +53,10 @@ std::optional<Rank> globalMuteAuthority(PrimeBDS &plugin) {
 }
 bool isGloballyMuted(PrimeBDS &plugin, endstone::Player &player) {
     const auto current = globalMuteAuthority(plugin);
-    if (!current || player.hasPermission("primebds.globalmute.exempt")) return false;
+    if (!current) return false;
     const auto target = playerRank(plugin, player.getName());
-    if (privileged(target)) return false;
+    if (utils::globalMuteExempt(player.hasPermission("primebds.command.globalmute"),
+            player.hasPermission("primebds.globalmute.exempt"), privileged(target))) return false;
     return plugin.globalmute.console || utils::globalMuteAffects(plugin.globalmute.created, *current, target);
 }
 bool mayTarget(PrimeBDS &plugin, endstone::CommandSender &sender, const std::string &target, bool allow_self) {

@@ -28,7 +28,43 @@ namespace primebds::commands {
                          "/rank (weight)<sub: rank_sub> <rank: string> <weight: int>",
                          "/rank (prefix)<sub: rank_sub> <rank: string> <prefix: message>",
                          "/rank (suffix)<sub: rank_sub> <rank: string> <suffix: message>"};
-                     info.permissions = {"primebds.command.rank", "primebds.command.rank.set", "primebds.command.rank.list", "primebds.command.rank.info"};);
+                     info.permissions = {"primebds.command.rank"};);
+
+    static bool executeRankAction(PrimeBDS &, endstone::CommandSender &, const std::vector<std::string> &);
+    static bool cmd_rankset(PrimeBDS &, endstone::CommandSender &, const std::vector<std::string> &);
+    static bool cmd_ranklist(PrimeBDS &, endstone::CommandSender &, const std::vector<std::string> &);
+    static bool cmd_rankinfo(PrimeBDS &, endstone::CommandSender &, const std::vector<std::string> &);
+    REGISTER_COMMAND(rankset, "Assign an existing rank to a player", cmd_rankset,
+        info.usages = utils::rankSetUsages(); info.permissions = {"primebds.command.rank.set"};);
+    REGISTER_COMMAND(ranklist, "List ranks by descending weight", cmd_ranklist,
+        info.usages = utils::rankListUsages(); info.permissions = {"primebds.command.rank.list"};);
+    REGISTER_COMMAND(rankinfo, "Inspect a rank definition", cmd_rankinfo,
+        info.usages = utils::rankInfoUsages(); info.permissions = {"primebds.command.rank.info"};);
+
+    static bool cmd_rank(PrimeBDS &plugin, endstone::CommandSender &sender, const std::vector<std::string> &args) {
+        if (!hierarchy::isConsole(plugin, sender) &&
+            (!hierarchy::isAdministrator(plugin, sender) || !sender.hasPermission("primebds.command.rank"))) {
+            sender.sendMessage("You do not have permission to use this command"); return true;
+        }
+        return executeRankAction(plugin, sender, args);
+    }
+    static bool delegatedRank(PrimeBDS &plugin, endstone::CommandSender &sender,
+                              const std::string &action, const std::vector<std::string> &args) {
+        if (!config::ConfigManager::instance().isCommandEnabled("rank" + action)) {
+            sender.sendMessage("This rank command is disabled."); return true;
+        }
+        if (!hierarchy::isConsole(plugin, sender) && !sender.hasPermission("primebds.command.rank." + action)) {
+            sender.sendMessage("You do not have permission to use this command"); return true;
+        }
+        if ((action == "set" && args.size() != 2) || (action == "info" && args.size() != 1) ||
+            (action == "list" && args.size() > 1)) return false;
+        std::vector<std::string> forwarded{action};
+        forwarded.insert(forwarded.end(), args.begin(), args.end());
+        return executeRankAction(plugin, sender, forwarded);
+    }
+    static bool cmd_rankset(PrimeBDS &p, endstone::CommandSender &s, const std::vector<std::string> &a) { return delegatedRank(p,s,"set",a); }
+    static bool cmd_ranklist(PrimeBDS &p, endstone::CommandSender &s, const std::vector<std::string> &a) { return delegatedRank(p,s,"list",a); }
+    static bool cmd_rankinfo(PrimeBDS &p, endstone::CommandSender &s, const std::vector<std::string> &a) { return delegatedRank(p,s,"info",a); }
 
     static std::string toLower(const std::string &s) {
         std::string out = s;
@@ -46,8 +82,8 @@ namespace primebds::commands {
         return "";
     }
 
-    /// Manage server ranks!
-    static bool cmd_rank(PrimeBDS &plugin, endstone::CommandSender &sender,
+    /// Shared executor; each public entrypoint has its own permission gate.
+    static bool executeRankAction(PrimeBDS &plugin, endstone::CommandSender &sender,
                          const std::vector<std::string> &args) {
         const bool console = hierarchy::isConsole(plugin, sender);
         const bool full = console || (hierarchy::isAdministrator(plugin, sender) && sender.hasPermission("primebds.command.rank"));
@@ -55,14 +91,6 @@ namespace primebds::commands {
             sender.sendMessage("The rank command is disabled."); return false;
         }
         const auto action = args.empty() ? std::string{} : hierarchy::lower(args[0]);
-        if (args.empty() && !full) {
-            for (const auto *subcommand : {"set", "list", "info"}) {
-                if (!utils::mayUseRankAction(false, subcommand, [&](const std::string &node) { return sender.hasPermission(node); })) continue;
-                const std::string sub = subcommand;
-                sender.sendMessage("/rank " + sub + (sub == "set" ? " <player> <rank>" : sub == "info" ? " <rank>" : " [page]"));
-            }
-            return true;
-        }
         if (!utils::mayUseRankAction(full, action, [&](const std::string &node) { return sender.hasPermission(node); })) {
             sender.sendMessage("You do not have permission to use this command"); return true;
         }
@@ -82,17 +110,24 @@ namespace primebds::commands {
 
 
         if (sub == "list") {
-            auto perms = cfg.loadPermissions();
-            if (perms.empty()) {
-                sender.sendMessage("\u00a7cNo ranks exist");
-                return true;
+            int page = 1;
+            if (args.size() > 2 || (args.size() == 2 && !utils::parsePage(args[1], page))) {
+                sender.sendMessage("Page must be a positive integer."); return true;
             }
-            sender.sendMessage("\u00a7a--- Ranks ---");
-            for (auto &[name, data] : perms.items()) {
-                int weight = data.value("weight", 0);
-                std::string prefix = data.value("prefix", "");
-                sender.sendMessage("\u00a7e" + name + " \u00a77[weight: " + std::to_string(weight) + "]" +
-                                   (prefix.empty() ? "" : " \u00a77prefix: " + prefix));
+            const auto perms = pm.PERMISSIONS;
+            std::vector<hierarchy::Rank> ranks;
+            for (const auto &[name, data] : perms.items()) ranks.push_back(hierarchy::rankOf(name));
+            utils::sortRanks(ranks);
+            const auto slice = utils::rankPage(ranks.size(), page);
+            if (!slice) { sender.sendMessage("Invalid rank-list page."); return true; }
+            if (ranks.empty()) { sender.sendMessage("No ranks exist."); return true; }
+            sender.sendMessage("§a--- Ranks (page " + std::to_string(page) + "/" + std::to_string(slice->pages) + ") ---");
+            for (auto i = slice->begin; i < slice->end; ++i) {
+                const auto &rank = ranks[i];
+                const auto &data = perms.at(rank.name);
+                const std::string prefix = data.is_object() && data.contains("prefix") && data["prefix"].is_string() ? data["prefix"].get<std::string>() : "";
+                sender.sendMessage("§e" + rank.name + " §7[weight: " + (rank.weight ? std::to_string(*rank.weight) : "unknown") + "]" +
+                    (prefix.empty() ? "" : " §7prefix: " + prefix));
             }
             return true;
         }

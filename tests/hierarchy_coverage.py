@@ -42,6 +42,17 @@ print('Personal warning help, staff permission, and offline rank guard wiring ch
 for node in ('set', 'list', 'info'):
     permission = 'primebds.command.rank.' + node
     assert permission in metadata and permission in rank
+    block = metadata.split(f'cmd(b, "rank{node}")',1)[1].split('cmd(b,',1)[0]
+    assert f'.permissions("{permission}")' in block
+    assert 'dispatchCommand' not in rank, 'Delegation must not run as console'
+root_rank = metadata.split('cmd(b, "rank")',1)[1].split('cmd(b,',1)[0]
+assert '.permissions("primebds.command.rank")' in root_rank
+assert 'primebds.command.rank.' not in root_rank, 'Delegated grants must not expose the complete rank grammar'
+root_registration = rank.split('REGISTER_COMMAND(rank,',1)[1].split('static bool executeRankAction',1)[0]
+assert 'info.permissions = {"primebds.command.rank"}' in root_registration
+assert 'primebds.command.rank.' not in root_registration
+assert 'isCommandEnabled("rank" + action)' in rank and 'isCommandEnabled("rank")' in rank
+assert 'player.updateCommands()' in (root/'src/plugin.cpp').read_text(encoding='utf-8')
 assert 'mayUseRankAction(' in rank
 chat = (root/'src/handlers/chat.cpp').read_text(encoding='utf-8')
 cords = (root/'src/commands/misc/cords.cpp').read_text(encoding='utf-8')
@@ -54,3 +65,24 @@ for path in ('src/handlers/chat.cpp', 'src/commands/message/voice.cpp'):
 for path in ('src/handlers/chat.cpp','src/commands/message/staffchat.cpp'):
     assert 'utils::staffChatMessage(' in (root/path).read_text(encoding='utf-8')
 print('Delegated rank nodes, coordinate chat event, scoped mute and shared staff formatting checked.')
+
+for name in ('spawn','warp','home','homeother','back','offlinetp','top','bottom'):
+    source = (root/f'src/commands/movement/{name}.cpp').read_text(encoding='utf-8')
+    assert 'performCommand(' not in source and 'dispatchCommand(' not in source, name
+    assert re.search(r'if \(!utils::teleport(?:Saved|Logout|Here)\([^\n]+\)\) return true;',source), name
+    if name in ('spawn','warp','home','back'):
+        guard = source.index('if (!utils::teleport')
+        commit = source.index(f'{name}_cooldowns[player->getXuid()] = now;')
+        assert guard < commit, f'{name} cooldown committed before teleport success'
+adapter = (root/'src/utils/teleport.cpp').read_text(encoding='utf-8')
+assert 'return player.teleport(endstone::Location(dimension,' in adapter
+assert 'target.pitch.value_or(current.getPitch())' in adapter and 'target.yaw.value_or(current.getYaw())' in adapter
+offline = (root/'src/commands/movement/offlinetp.cpp').read_text(encoding='utf-8')
+assert 'user->last_logout_pos, user->last_logout_dim' in offline
+assert '/offlinetp <player: string>' in metadata and '/offlinetp <player: string>' in offline
+mute = (root/'src/commands/moderation/globalmute.cpp').read_text(encoding='utf-8')
+assert 'mayManageGlobalMute(' in mute and 'mayLiftGlobalMute(' not in mute
+assert 'globalMuteExempt(player.hasPermission("primebds.command.globalmute")' in (root/'src/utils/hierarchy.cpp').read_text(encoding='utf-8')
+for path in ('src/commands/server/rank.cpp','src/commands/server/filterlist.cpp'):
+    assert 'utils::sortRanks(ranks)' in (root/path).read_text(encoding='utf-8')
+print('Full-rank visibility, independent delegation, teleport success gates and permission-based mute exemption checked.')

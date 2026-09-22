@@ -21,6 +21,10 @@ inline std::optional<std::vector<std::string>> spyTargets(
         if (!request) return std::nullopt;
         return request->target.empty() ? std::vector<std::string>{} : std::vector<std::string>{request->target};
     }
+    if (name == "rankset") {
+        if (args.size() != 2) return std::nullopt;
+        return std::vector<std::string>{args[0]};
+    }
     if (name == "rank") {
         if (args.size() < 3 || lower(args[0]) != "set") return std::nullopt;
         return std::vector<std::string>{args[1]};

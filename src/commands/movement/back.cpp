@@ -3,6 +3,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/teleport.h"
 
 #include <ctime>
 #include <map>
@@ -48,29 +49,9 @@ namespace primebds::commands {
             }
         }
 
-        // Decode location and teleport
-        try {
-            auto decoded = plugin.serverdb->decodeLocation(row->at("location"));
-            auto *level = plugin.getServer().getLevel();
-            if (!level) {
-                sender.sendMessage("\u00a7cLevel not loaded");
-                return true;
-            }
-            auto *dim = level->getDimension(decoded["dimension"].get<std::string>());
-            if (!dim) {
-                sender.sendMessage("\u00a7cSaved dimension no longer exists");
-                return true;
-            }
-            endstone::Location loc(*dim, decoded["x"].get<double>(), decoded["y"].get<double>(),
-                                   decoded["z"].get<double>(), decoded["pitch"].get<float>(),
-                                   decoded["yaw"].get<float>());
-            player->teleport(loc);
-            player->sendMessage("\u00a7aTeleported to your last location");
-            back_cooldowns[player->getXuid()] = now;
-        } catch (const std::exception &e) {
-            sender.sendMessage("\u00a7cFailed to teleport: " + std::string(e.what()));
-            return false;
-        }
+        if (!utils::teleportSaved(plugin, *player, row->at("location"))) return true;
+        player->sendMessage("§aTeleported to your last location");
+        back_cooldowns[player->getXuid()] = now;
         return true;
     }
 
