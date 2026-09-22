@@ -1,6 +1,7 @@
 #include "primebds/utils/warning_command.h"
 #include "primebds/commands/command_metadata.h"
 #include "primebds/utils/admin_commands.h"
+#include "primebds/utils/rank_tools.h"
 
 #include <map>
 #include <sstream>
@@ -566,7 +567,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
     // SERVER
     // -----------------------------------------------------------------------
     cmd(b, "filterlist").description("Lists all players with a filter!")
-        .usages("/filterlist (ops|default|online|offline|muted|banned|ipbanned)<plist_filter: plist_filter> [page: int]")
+        .usages(utils::filterListUsages())
         .permissions("primebds.command.filterlist")
         .aliases("flist");
 
@@ -602,7 +603,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
             "/rank (weight)<sub: rank_sub> <rank: string> <weight: int>",
             "/rank (prefix)<sub: rank_sub> <rank: string> <prefix: message>",
             "/rank (suffix)<sub: rank_sub> <rank: string> <suffix: message>")
-        .permissions("primebds.command.rank", "primebds.command.rank.set");
+        .permissions("primebds.command.rank", "primebds.command.rank.set", "primebds.command.rank.list", "primebds.command.rank.info");
 
     cmd(b, "reloadscripts").description("Reloads server scripts!")
         .usages("/reloadscripts")

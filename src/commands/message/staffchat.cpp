@@ -3,6 +3,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/rank_tools.h"
 
 namespace primebds::commands {
 
@@ -47,7 +48,7 @@ namespace primebds::commands {
 
         for (auto *p : plugin.getServer().getOnlinePlayers()) {
             if (p->hasPermission("primebds.command.staffchat")) {
-                p->sendMessage("\u00a78[\u00a7cStaff\u00a78] \u00a7e" + player->getName() + "\u00a77: \u00a7f" + msg);
+                p->sendMessage(utils::staffChatMessage(player->getNameTag(), msg));
             }
         }
         return true;

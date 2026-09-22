@@ -5,6 +5,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/rank_tools.h"
 #include "primebds/utils/config/config_manager.h"
 #include "primebds/utils/permissions/permission_manager.h"
 
@@ -27,7 +28,7 @@ namespace primebds::commands {
                          "/rank (weight)<sub: rank_sub> <rank: string> <weight: int>",
                          "/rank (prefix)<sub: rank_sub> <rank: string> <prefix: message>",
                          "/rank (suffix)<sub: rank_sub> <rank: string> <suffix: message>"};
-                     info.permissions = {"primebds.command.rank", "primebds.command.rank.set"};);
+                     info.permissions = {"primebds.command.rank", "primebds.command.rank.set", "primebds.command.rank.list", "primebds.command.rank.info"};);
 
     static std::string toLower(const std::string &s) {
         std::string out = s;
@@ -50,13 +51,20 @@ namespace primebds::commands {
                          const std::vector<std::string> &args) {
         const bool console = hierarchy::isConsole(plugin, sender);
         const bool full = console || (hierarchy::isAdministrator(plugin, sender) && sender.hasPermission("primebds.command.rank"));
-        const bool set_only = console || sender.hasPermission("primebds.command.rank.set");
         if (!config::ConfigManager::instance().isCommandEnabled("rank")) {
             sender.sendMessage("The rank command is disabled."); return false;
         }
         const auto action = args.empty() ? std::string{} : hierarchy::lower(args[0]);
-        if ((!full && action != "set") || (action == "set" && !full && !set_only)) {
-            sender.sendMessage("You do not have permission for this rank subcommand."); return false;
+        if (args.empty() && !full) {
+            for (const auto *subcommand : {"set", "list", "info"}) {
+                if (!utils::mayUseRankAction(false, subcommand, [&](const std::string &node) { return sender.hasPermission(node); })) continue;
+                const std::string sub = subcommand;
+                sender.sendMessage("/rank " + sub + (sub == "set" ? " <player> <rank>" : sub == "info" ? " <rank>" : " [page]"));
+            }
+            return true;
+        }
+        if (!utils::mayUseRankAction(full, action, [&](const std::string &node) { return sender.hasPermission(node); })) {
+            sender.sendMessage("You do not have permission to use this command"); return true;
         }
         if (args.empty()) {
             sender.sendMessage("\u00a7cUsage: /rank <set|create|delete|info|perm|list|inherit|weight|prefix|suffix> ...");

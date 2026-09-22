@@ -3,6 +3,8 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/rank_tools.h"
+#include "primebds/utils/permissions/permission_manager.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -16,29 +18,42 @@ namespace primebds::commands {
                         const std::vector<std::string> &);
 
     REGISTER_COMMAND(filterlist, "Lists all players with a filter!", cmd_filterlist,
-                     info.usages = {"/filterlist (ops|default|online|offline|muted|banned|ipbanned)<plist_filter: plist_filter> [page: int]"};
+                     info.usages = utils::filterListUsages();
                      info.permissions = {"primebds.command.filterlist"};
                      info.aliases = {"flist"};);
 
     /// Lists all players with a filter!
     static bool cmd_filterlist(PrimeBDS &plugin, endstone::CommandSender &sender,
                                const std::vector<std::string> &args) {
-        if (args.empty()) {
-            sender.sendMessage("\u00a7cUsage: /filterlist <ops|default|online|offline|muted|banned|ipbanned> [page]");
-            return false;
-        }
-
-        std::string filter = args[0];
+        std::string filter = args.empty() ? "ranks" : args[0];
         for (auto &c : filter)
             c = static_cast<char>(std::tolower(c));
-        int page = (args.size() >= 2) ? std::atoi(args[1].c_str()) : 1;
-        if (page < 1)
-            page = 1;
+        const std::size_t page_index = filter == "rank" ? 2 : 1;
+        int page = 1;
+        if (args.size() > page_index + 1 || (args.size() > page_index && !utils::parsePage(args[page_index], page))) {
+            sender.sendMessage("Page must be a positive integer."); return false;
+        }
         const int per_page = 10;
 
         std::vector<std::string> results;
 
-        if (filter == "ops") {
+        if (filter == "ranks" || filter == "rank") {
+            std::vector<std::string> rank_names;
+            for (const auto &[name, data] : permissions::PermissionManager::instance().PERMISSIONS.items())
+                rank_names.push_back(name);
+            const auto directory = utils::rankDirectory(rank_names, plugin.db->getAllUsers());
+            if (filter == "ranks") {
+                for (const auto &[key, entry] : directory)
+                    results.push_back(entry.name + ": " + std::to_string(entry.members.size()) + " player(s)");
+                sender.sendMessage("All saved players, including offline. Use /flist rank <rank> [page] for names.");
+            } else {
+                if (args.size() < 2) { sender.sendMessage("Usage: /flist rank <rank> [page]"); return false; }
+                const auto it = directory.find(hierarchy::lower(args[1]));
+                if (it == directory.end()) { sender.sendMessage("Unknown rank."); return false; }
+                results = it->second.members;
+                filter = it->second.name;
+            }
+        } else if (filter == "ops") {
             // Read permissions.json from server root for operator entries
             auto perms_path = plugin.getDataFolder().parent_path().parent_path() / "permissions.json";
             if (!std::filesystem::exists(perms_path)) {
@@ -116,7 +131,7 @@ namespace primebds::commands {
             for (auto &u : ipbanned)
                 results.push_back(u.name);
         } else {
-            sender.sendMessage("\u00a7cInvalid filter. Valid: ops, default, online, offline, muted, banned, ipbanned");
+            sender.sendMessage("\u00a7cInvalid filter. Valid: ranks, rank <rank>, ops, default, online, offline, muted, banned, ipbanned");
             return false;
         }
 
@@ -135,7 +150,7 @@ namespace primebds::commands {
         int start = (page - 1) * per_page;
         int end = std::min(start + per_page, total);
 
-        std::string msg = "\u00a7r" + filter + " Players \u00a77(Page " +
+        std::string msg = "\u00a7r" + filter + " (" + std::to_string(total) + " total) \u00a77(Page " +
                           std::to_string(page) + "/" + std::to_string(total_pages) + "):";
         for (int i = start; i < end; ++i)
             msg += "\n\u00a77- \u00a7e" + results[i];

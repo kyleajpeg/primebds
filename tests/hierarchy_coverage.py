@@ -38,3 +38,19 @@ assert 'hierarchy::rankOf(user->internal_rank), destination' in rank
 assert 'assignRank(user->xuid, key)' in rank
 assert 'not found online' not in rank
 print('Personal warning help, staff permission, and offline rank guard wiring checked.')
+
+for node in ('set', 'list', 'info'):
+    permission = 'primebds.command.rank.' + node
+    assert permission in metadata and permission in rank
+assert 'mayUseRankAction(' in rank
+chat = (root/'src/handlers/chat.cpp').read_text(encoding='utf-8')
+cords = (root/'src/commands/misc/cords.cpp').read_text(encoding='utf-8')
+assert 'handlers::sendPublicChat(plugin, *player,' in cords
+public = chat.split('bool sendPublicChat(',1)[1]
+assert public.index('callEvent(event)') < public.index('if (event.isCancelled()) return false;') < public.index('recipient->sendMessage(rendered)')
+assert '&event != plugin.public_chat_event' in chat
+for path in ('src/handlers/chat.cpp', 'src/commands/message/voice.cpp'):
+    assert 'hierarchy::isGloballyMuted(' in (root/path).read_text(encoding='utf-8')
+for path in ('src/handlers/chat.cpp','src/commands/message/staffchat.cpp'):
+    assert 'utils::staffChatMessage(' in (root/path).read_text(encoding='utf-8')
+print('Delegated rank nodes, coordinate chat event, scoped mute and shared staff formatting checked.')

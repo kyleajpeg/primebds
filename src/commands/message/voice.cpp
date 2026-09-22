@@ -3,6 +3,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/hierarchy.h"
 
 namespace primebds::commands {
 
@@ -23,7 +24,7 @@ namespace primebds::commands {
         }
 
         // Check if global mute is active and player doesn't have exempt
-        if (plugin.globalmute && !player->hasPermission("primebds.globalmute.exempt")) {
+        if (hierarchy::isGloballyMuted(plugin, *player)) {
             sender.sendMessage("\u00a7cGlobal mute is active. You cannot use voice chat.");
             return true;
         }

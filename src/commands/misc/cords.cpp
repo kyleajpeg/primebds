@@ -23,7 +23,7 @@ namespace primebds::commands {
             return true;
         }
         auto loc = player->getLocation();
-        player->sendMessage(std::to_string(loc.getBlockX()) + " " +
+        handlers::sendPublicChat(plugin, *player, std::to_string(loc.getBlockX()) + " " +
                             std::to_string(loc.getBlockY()) + " " +
                             std::to_string(loc.getBlockZ()));
         return true;

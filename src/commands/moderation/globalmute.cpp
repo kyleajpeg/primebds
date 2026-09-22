@@ -3,6 +3,7 @@
 
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/hierarchy.h"
 
 namespace primebds::commands {
 
@@ -17,11 +18,24 @@ namespace primebds::commands {
     /// Toggles global mute for the server!
     static bool cmd_globalmute(PrimeBDS &plugin, endstone::CommandSender &sender,
                                const std::vector<std::string> &args) {
-        plugin.globalmute = plugin.globalmute ? 0 : 1;
-        if (plugin.globalmute) {
-            plugin.getServer().broadcastMessage("\u00a7c\u00a7lGlobal mute has been enabled by " + sender.getName());
-        } else {
+        const auto authority = hierarchy::globalMuteAuthority(plugin);
+        auto *player = sender.asPlayer();
+        if (authority) {
+            const bool own = player && player->getXuid() == plugin.globalmute.issuer_xuid;
+            if (!utils::mayLiftGlobalMute(hierarchy::isAdministrator(plugin, sender), own,
+                    plugin.globalmute.console, hierarchy::playerRank(plugin, sender.getName()), *authority)) {
+                sender.sendMessage("You do not have permission to use this command");
+                return false;
+            }
+            plugin.globalmute = {};
             plugin.getServer().broadcastMessage("\u00a7a\u00a7lGlobal mute has been disabled by " + sender.getName());
+        } else {
+            const bool console = hierarchy::isConsole(plugin, sender);
+            const auto rank = console ? hierarchy::Rank{"Owner", 0} : hierarchy::playerRank(plugin, sender.getName());
+            if (!console && (!player || !rank.weight)) return false;
+            plugin.globalmute = {true, console, player ? player->getXuid() : "", rank};
+            plugin.getServer().broadcastMessage("\u00a7c\u00a7lGlobal mute has been enabled by " + sender.getName() +
+                (console || hierarchy::privileged(rank) ? "" : " (lower ranks only)"));
         }
         return true;
     }

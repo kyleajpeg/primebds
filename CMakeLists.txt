@@ -78,6 +78,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 option(PRIMEBDS_BUILD_TESTS "Build permission, audit and player default regression tests" ON)
 if(PRIMEBDS_BUILD_TESTS)
     enable_testing()
+    add_executable(rank_tools_test tests/rank_tools_test.cpp)
+    target_include_directories(rank_tools_test PRIVATE include)
+    add_test(NAME rank_tools COMMAND rank_tools_test)
     add_executable(command_syntax_test tests/command_syntax_test.cpp
         ${endstone_SOURCE_DIR}/src/endstone/core/command/command_lexer.cpp
         ${endstone_SOURCE_DIR}/src/endstone/core/command/command_usage_parser.cpp)

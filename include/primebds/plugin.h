@@ -12,6 +12,7 @@
 #include "primebds/utils/database/user_db.h"
 #include "primebds/utils/intervals.h"
 #include "primebds/utils/admin_commands.h"
+#include "primebds/utils/rank_tools.h"
 
 // Handler includes (split organization)
 #include "primebds/handlers/actions.h"
@@ -80,7 +81,9 @@ namespace primebds {
         std::map<std::string, double> chat_cooldown;
 
         // Global mute
-        int globalmute = 0;
+        utils::GlobalMuteState globalmute;
+        // Scoped marker: coordinate messages use public chat even in staff-chat mode.
+        const endstone::PlayerChatEvent *public_chat_event = nullptr;
 
         // Combat tracking
         std::map<std::string, double> entity_damage_cooldowns;

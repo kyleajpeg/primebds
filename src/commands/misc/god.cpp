@@ -26,11 +26,11 @@ namespace primebds::commands {
             }
             if (plugin.isgod.enabled(*player)) {
                 plugin.isgod.set(*player, false);
-                player->sendMessage("\u00a7cYou are no longer invulnerable");
+                player->sendMessage("\u00a7cGod mode disabled");
             } else {
                 plugin.isgod.set(*player, true);
                 plugin.maintainGodMode(*player);
-                player->sendMessage("\u00a7aGod mode enabled: invulnerable, with health and hunger kept full");
+                player->sendMessage("\u00a7aGod mode enabled");
             }
             return true;
         }
@@ -56,18 +56,19 @@ namespace primebds::commands {
             if (enable) {
                 plugin.isgod.set(*p, true);
                 plugin.maintainGodMode(*p);
-                p->sendMessage("\u00a7aGod mode enabled: invulnerable, with health and hunger kept full");
+                p->sendMessage("\u00a7aGod mode enabled");
             } else {
                 plugin.isgod.set(*p, false);
-                p->sendMessage("\u00a7cYou are no longer invulnerable");
+                p->sendMessage("\u00a7cGod mode disabled");
             }
+            if (p != sender.asPlayer())
+                sender.sendMessage(p->getName() + (enable ? ": God mode enabled" : ": God mode disabled"));
             ++updated;
         }
         if (!updated) {
             sender.sendMessage("No matching players were updated.");
             return false;
         }
-        sender.sendMessage("\u00a7eInvulnerability updated for " + std::to_string(updated) + " players");
         return true;
     }
 

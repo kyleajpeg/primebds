@@ -1,5 +1,6 @@
 #include "primebds/commands/command_registry.h"
 #include "primebds/plugin.h"
+#include "primebds/utils/rank_tools.h"
 #include "primebds/utils/target_selector.h"
 
 namespace primebds::commands {
@@ -28,8 +29,8 @@ namespace primebds::commands {
                 continue;
             }
             const bool clear = utils::clearsNickname(args);
-            player->setNameTag(clear ? player->getName() : args[0]);
-            sender.sendMessage(player->getName() + (clear ? ": nickname cleared." : ": nickname set to " + args[0]));
+            player->setNameTag(clear ? player->getName() : utils::markedNickname(args[0]));
+            sender.sendMessage(player->getName() + (clear ? ": nickname cleared." : ": nickname set to " + utils::markedNickname(args[0])));
             ++count;
         }
         if (!count && targets.empty()) sender.sendMessage("No matching players found.");

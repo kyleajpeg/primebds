@@ -8,8 +8,8 @@ static void check(bool ok, const char *message) {
     if (!ok) { std::cerr << "FAILED: " << message << '\n'; std::exit(1); }
 }
 int main() {
-    const Rank owner{"Owner",1000}, op{"Operator",100}, co{"Co-Owner",50}, mod{"Moderator",25}, member{"Default",0};
-    const std::vector<Rank> ranks{owner,op,co,mod,member};
+    const Rank owner{"Owner",1000}, op{"Operator",100}, co{"Co-Owner",75}, admin{"Admin",50}, mod{"Moderator",25}, member{"Default",0};
+    const std::vector<Rank> ranks{owner,op,co,admin,mod,member};
     for (std::size_t i=0;i<ranks.size();++i) for (std::size_t j=0;j<ranks.size();++j) {
         check(canTarget(ranks[i],ranks[j],false,true)==(i<2 || i<j),"target rank order/peer protection");
         check(canTarget(ranks[i],ranks[i],true,true),"self utility use");

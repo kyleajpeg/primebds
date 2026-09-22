@@ -34,6 +34,27 @@ bool isAdministrator(PrimeBDS &plugin, endstone::CommandSender &sender) {
     auto rank = playerRank(plugin, player->getName());
     return privileged(rank);
 }
+std::optional<Rank> globalMuteAuthority(PrimeBDS &plugin) {
+    auto &mute = plugin.globalmute;
+    if (!mute.enabled) return std::nullopt;
+    if (mute.console) return Rank{"Owner", 0};
+    const auto user = plugin.db->getUserByXuid(mute.issuer_xuid);
+    if (user) {
+        auto current = rankOf(user->internal_rank);
+        const auto grants = plugin.savedPermissions(user->xuid, user->internal_rank);
+        const auto grant = grants.find("primebds.command.globalmute");
+        if (current.weight && grant != grants.end() && grant->second) return current;
+    }
+    mute = {}; // Revoked/deleted authority cannot keep a mute active.
+    return std::nullopt;
+}
+bool isGloballyMuted(PrimeBDS &plugin, endstone::Player &player) {
+    const auto current = globalMuteAuthority(plugin);
+    if (!current || player.hasPermission("primebds.globalmute.exempt")) return false;
+    const auto target = playerRank(plugin, player.getName());
+    if (privileged(target)) return false;
+    return plugin.globalmute.console || utils::globalMuteAffects(plugin.globalmute.created, *current, target);
+}
 bool mayTarget(PrimeBDS &plugin, endstone::CommandSender &sender, const std::string &target, bool allow_self) {
     if (isConsole(plugin, sender)) return true;
     auto *player = sender.asPlayer();
@@ -61,7 +82,7 @@ bool authorizePluginCommand(PrimeBDS &plugin, endstone::CommandSender &sender,
     auto policy = commandPolicy(name);
     if (policy == CommandPolicy::Owner || policy == CommandPolicy::Permissions) {
         if (!isAdministrator(plugin, sender)) {
-            sender.sendMessage("This administration command is reserved for Owner or the panel console.");
+            sender.sendMessage("You do not have permission to use this command");
             return false;
         }
         if (policy == CommandPolicy::Permissions && !args.empty())
@@ -69,7 +90,7 @@ bool authorizePluginCommand(PrimeBDS &plugin, endstone::CommandSender &sender,
         return true;
     }
     if (policy == CommandPolicy::Console || policy == CommandPolicy::Deny) {
-        sender.sendMessage("This command needs the panel console: its broad effects cannot be limited to lower ranks.");
+        sender.sendMessage("You do not have permission to use this command");
         return false;
     }
     if (name == "staffwarnings") return true; // Handler separates self-read from moderation.
@@ -98,7 +119,7 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
         "wsserver", "permission", "allowlist", "whitelist", "ban-ip", "banip", "unban-ip", "pardon-ip",
         "reload", "reloadconfig", "reloadpacketlimitconfig", "changesetting", "gametest"};
     if (console_only.contains(name)) {
-        sender.sendMessage("Use the panel console for indirect execution or server-wide configuration.");
+        sender.sendMessage("You do not have permission to use this command");
         return false;
     }
     // World/operational changes remain Owner-only; this policy protects direct player targeting,
@@ -108,7 +129,7 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
         "setworldspawn", "mobevent", "tickingarea", "setmaxplayers", "scoreboard"};
     if (owner_world.contains(name)) {
         if (isAdministrator(plugin, sender) && name != "scoreboard") return true;
-        sender.sendMessage("Use Owner/panel for world administration; scoreboard targeting requires the panel.");
+        sender.sendMessage("You do not have permission to use this command");
         return false;
     }
     std::size_t index = 0;
@@ -124,7 +145,7 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
             if (!requireTarget(plugin, sender, target)) return false;
         return true;
     } else if (!first_target.contains(name)) {
-        sender.sendMessage("This native command has no reviewed hierarchy policy; use the panel console.");
+        sender.sendMessage("You do not have permission to use this command");
         return false;
     }
     if (name == "kick" || name == "ban" || name == "pardon" || name == "unban" || name == "op" || name == "deop")

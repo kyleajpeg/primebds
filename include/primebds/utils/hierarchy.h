@@ -8,6 +8,8 @@ Rank rankOf(const std::string &name);
 Rank playerRank(PrimeBDS &plugin, const std::string &name);
 bool isConsole(PrimeBDS &plugin, endstone::CommandSender &sender);
 bool isAdministrator(PrimeBDS &plugin, endstone::CommandSender &sender);
+std::optional<Rank> globalMuteAuthority(PrimeBDS &plugin);
+bool isGloballyMuted(PrimeBDS &plugin, endstone::Player &player);
 bool mayTarget(PrimeBDS &plugin, endstone::CommandSender &sender,
                const std::string &target, bool allow_self = true);
 bool requireTarget(PrimeBDS &plugin, endstone::CommandSender &sender,

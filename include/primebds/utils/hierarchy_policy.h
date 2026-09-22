@@ -124,7 +124,8 @@ inline CommandPolicy commandPolicy(const std::string &name) {
         add(CommandPolicy::Named, "activity check alts homeother offlinetp permissionslist note");
         add(CommandPolicy::Moderation, "mute nameban nameunban permban punishments removeban silentmute tempban tempmute unmute unwarn warn staffwarnings");
         add(CommandPolicy::Owner, "motd setrules setback sethomes setspawn warps primebds reloadscripts updatepacks");
-        add(CommandPolicy::Console, "alist ipban ipmute globalmute");
+        add(CommandPolicy::Console, "alist ipban ipmute");
+        p.emplace("globalmute", CommandPolicy::Ordinary); // Scope and issuer checked inside the handler.
         p.emplace("rank", CommandPolicy::Rank);
         p.emplace("permissions", CommandPolicy::Permissions);
         return p;

@@ -8,6 +8,9 @@
 #include "primebds/utils/logging.h"
 #include "primebds/utils/moderation.h"
 #include "primebds/utils/permissions/permission_manager.h"
+#include "primebds/utils/hierarchy.h"
+#include "primebds/utils/rank_tools.h"
+#include <fmt/format.h>
 
 #include <chrono>
 #include <regex>
@@ -29,6 +32,7 @@ namespace primebds::handlers {
     }
 
     void handleChatEvent(PrimeBDS &plugin, endstone::PlayerChatEvent &event) {
+        if (event.isCancelled()) return;
         auto &player = event.getPlayer();
         auto xuid = player.getXuid();
 
@@ -37,7 +41,7 @@ namespace primebds::handlers {
         auto [ip_muted, ip_mute_time, ip_mute_reason] = plugin.db->checkIpMute(player.getAddress().getHostname());
 
         // Global mute check
-        if (plugin.globalmute == 1 && !player.hasPermission("primebds.globalmute.exempt")) {
+        if (hierarchy::isGloballyMuted(plugin, player)) {
             player.sendMessage("§cGlobal chat is currently muted by an admin");
             event.setCancelled(true);
             return;
@@ -78,10 +82,8 @@ namespace primebds::handlers {
 
         // Staff chat check
         auto user = plugin.db->getOnlineUser(xuid);
-        if (user && user->enabled_sc && player.hasPermission("primebds.command.staffchat")) {
-            auto sc_cfg = cfg.getModule("better_chat");
-            auto safe_msg = escapeBraces(event.getMessage());
-            auto msg = "§7[Staff] §e" + player.getName() + "§7: §6" + safe_msg;
+        if (&event != plugin.public_chat_event && user && user->enabled_sc && player.hasPermission("primebds.command.staffchat")) {
+            auto msg = utils::staffChatMessage(player.getNameTag(), event.getMessage());
             plugin.getServer().broadcast(msg, "primebds.command.staffchat");
             event.setCancelled(true);
             return;
@@ -122,6 +124,23 @@ namespace primebds::handlers {
 
         // Discord relay
         utils::discordRelay("**" + player.getName() + "**: " + event.getMessage(), "chat");
+    }
+
+    bool sendPublicChat(PrimeBDS &plugin, endstone::Player &player, const std::string &message) {
+        endstone::PlayerChatEvent event(player, message, std::nullopt);
+        // Restore the marker even if another event listener throws or emits nested chat.
+        struct Scope {
+            PrimeBDS &plugin;
+            const endstone::PlayerChatEvent *previous;
+            ~Scope() { plugin.public_chat_event = previous; }
+        } scope{plugin, plugin.public_chat_event};
+        plugin.public_chat_event = &event;
+        plugin.getServer().getPluginManager().callEvent(event);
+        if (event.isCancelled()) return false;
+        const auto rendered = fmt::format(fmt::runtime(event.getFormat()), player.getNameTag(), event.getMessage());
+        for (auto *recipient : event.getRecipients()) recipient->sendMessage(rendered);
+        plugin.getLogger().info("{}", rendered);
+        return true;
     }
 
 } // namespace primebds::handlers

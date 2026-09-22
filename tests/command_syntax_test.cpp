@@ -1,5 +1,6 @@
 #include "primebds/utils/admin_commands.h"
 #include "primebds/utils/warning_command.h"
+#include "primebds/utils/rank_tools.h"
 #include "endstone/core/command/command_usage_parser.h"
 #include <algorithm>
 #include <iostream>
@@ -9,6 +10,18 @@ using endstone::core::CommandUsageParser;
 void check(bool ok, const char *why) { if (!ok) throw std::runtime_error(why); }
 int main() {
     try {
+        int rank_forms = 0;
+        for (const auto &usage : primebds::utils::filterListUsages()) {
+            const auto parsed = CommandUsageParser(usage).parse();
+            check(parsed.has_value(), "Endstone rejected rank directory usage");
+            const auto &params = parsed->parameters;
+            if (!params.empty() && params[0].values == std::vector<std::string>{"rank"}) {
+                check(params.size() == 3 && params[1].type == "string" && !params[1].optional &&
+                      params[2].type == "int" && params[2].optional, "Rank names must support current and future ranks with optional pagination");
+                ++rank_forms;
+            }
+        }
+        check(rank_forms == 1, "Rank membership syntax missing");
         // Exercise Endstone's actual parser, not only our handler's argument parser.
         int numeric_modes = 0, reset_forms = 0;
         std::set<std::string> mode_values;
