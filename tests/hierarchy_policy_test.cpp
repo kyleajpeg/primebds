@@ -52,6 +52,12 @@ int main() {
     check(!spyTargets("execute",{"as","Owner"},""),"indirect commands withheld from non-admin spies");
     check(!spyTargets("staffchat",{"staff message"},""),"staff channel withheld from non-admin command spies");
     check(spyTargets("speed",{"2","Owner"},"")->at(0)=="Owner","speed target included for privacy");
+    check(commandPolicy("playerrank")==CommandPolicy::Ordinary, "Read-only rank lookup does not impose target hierarchy");
+    check(spyTargets("playerrank",{},"")->empty(), "Self rank lookup has no other target");
+    check(spyTargets("playerrank",{"Owner"},"")->at(0)=="Owner", "Rank lookup target included in spy privacy checks");
+    check(!spyTargets("playerrank",{"Owner","extra"},""), "Malformed rank lookup is withheld from ordinary spies");
+    auto lookup=tokenize("/playerrank \"Spaced Gamertag\"");
+    check(lookup && lookup->size()==2 && lookup->at(1)=="Spaced Gamertag", "Quoted lookup preserves gamertag");
     check(spyTargets("rankset",{"Owner","Default"},"")->at(0)=="Owner","delegated rank-set target included for privacy");
     check(!spyTargets("rankset",{"Owner"},""),"malformed rank-set attempts fail closed for spies");
     check(spyTargets("warnings",{"2"},"")->empty(),"Personal warning page is not another player's identity");

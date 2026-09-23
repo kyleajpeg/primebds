@@ -7,6 +7,7 @@
 namespace primebds::utils {
 inline std::vector<std::string> rankSetUsages() { return {"/rankset <player: string> <rank: string>"}; }
 inline std::vector<std::string> rankListUsages() { return {"/ranklist [page: int]"}; }
+inline std::vector<std::string> playerRankUsages() { return {"/playerrank [gamertag: string]"}; }
 inline std::vector<std::string> rankInfoUsages() { return {"/rankinfo <rank: string>"}; }
 inline void sortRanks(std::vector<hierarchy::Rank> &ranks) {
     std::sort(ranks.begin(), ranks.end(), [](const auto &a, const auto &b) {

@@ -1,4 +1,5 @@
 #include "primebds/utils/rank_tools.h"
+#include "primebds/utils/player_display.h"
 #include <iostream>
 #include <stdexcept>
 using namespace primebds;
@@ -62,6 +63,14 @@ int main() {
         check(utils::markedNickname("Name") == "~Name" && utils::markedNickname("~~Name") == "~Name", "Nickname marker must be visible and idempotent");
         check(utils::markedNickname("§bName") == "~§bName", "Colored nickname marker");
         check(utils::staffChatMessage("~Nick","{hello}") == "§8[§cStaff§8] §e~Nick§7: §f{hello}", "Staff colors, nicknames and literal braces");
+        const auto memberName = utils::rankedPlayerName("§8[§7Member§8] §7", "Spaced Gamertag");
+        const auto adminName = utils::rankedPlayerName("§8[§4Admin§8] §4", "Kyle");
+        const auto list = utils::onlineListMessages({memberName,adminName},20);
+        check(list.size()==2 && list[0]=="§aPlayers online: 2/20§r", "Online count and capacity");
+        check(list[1]==memberName+"§7, §r"+adminName, "Rank colors, real names, server order and formatting resets");
+        check(memberName=="§8[§7Member§8] §7Spaced Gamertag§r", "No chat suffix appended to player names");
+        check(utils::rankedPlayerName("","NoPrefix")=="NoPrefix§r", "Ranks without a prefix remain readable");
+        check(utils::onlineListMessages({},20)==std::vector<std::string>{"§aPlayers online: 0/20§r"}, "Empty list has only count header");
         std::cout << "Rank delegation, membership, scoped mute and display regression tests passed\n";
     } catch (const std::exception &error) { std::cerr << error.what() << '\n'; return 1; }
 }

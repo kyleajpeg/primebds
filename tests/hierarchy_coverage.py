@@ -86,3 +86,21 @@ assert 'globalMuteExempt(player.hasPermission("primebds.command.globalmute")' in
 for path in ('src/commands/server/rank.cpp','src/commands/server/filterlist.cpp'):
     assert 'utils::sortRanks(ranks)' in (root/path).read_text(encoding='utf-8')
 print('Full-rank visibility, independent delegation, teleport success gates and permission-based mute exemption checked.')
+
+# .12 command visibility, native-list interception and deferred notices.
+lookup = metadata.split('cmd(b, "playerrank")',1)[1].split('cmd(b,',1)[0]
+assert '.permissions("primebds.command.playerrank")' in lookup
+lookup_source = (root/'src/commands/server/playerrank.cpp').read_text(encoding='utf-8')
+assert 'getUniqueUserByName(args[0])' in lookup_source
+assert 'getMatchingActors' not in lookup_source and 'dispatchCommand' not in lookup_source
+assert 'info.permissions = {"primebds.command.playerrank"}' in lookup_source
+intercept = (root/'src/handlers/preprocesses/command_intercept.cpp').read_text(encoding='utf-8')
+assert intercept.count('if (cmd == "list" && args.size() == 1)') == 2
+assert intercept.index('canInterceptPlayerCommand(') < intercept.index('utils::sendRankedPlayerList(plugin, player)')
+assert '{"list", "minecraft.command.list"}' in (root/'include/primebds/handlers/preprocesses/command_authorization.h').read_text(encoding='utf-8')
+plugin = (root/'src/plugin.cpp').read_text(encoding='utf-8').split('bool PrimeBDS::reloadCustomPerms(',1)[1]
+assert plugin.index('if (!attachment)') < plugin.index('reconcilePlayerState(player)') < plugin.index('pendingRankNotice(') < plugin.index('clearPendingRankNotice(')
+assert 'Your rank is now' in plugin
+assert 'assignRank(player.getXuid(), "Default")' in (root/'src/utils/permissions/permission_manager.cpp').read_text(encoding='utf-8')
+assert '(lower ranks only)' not in mute
+print('Rank lookup registration, list authorization, and deferred notification wiring checked.')

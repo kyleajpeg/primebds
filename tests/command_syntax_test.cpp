@@ -10,6 +10,9 @@ using endstone::core::CommandUsageParser;
 void check(bool ok, const char *why) { if (!ok) throw std::runtime_error(why); }
 int main() {
     try {
+        const auto playerRank = CommandUsageParser(primebds::utils::playerRankUsages().at(0)).parse();
+        check(playerRank && playerRank->parameters.size()==1 && playerRank->parameters[0].type=="string" &&
+              playerRank->parameters[0].optional, "Player rank lookup accepts an optional offline gamertag");
         const auto rankset = CommandUsageParser(primebds::utils::rankSetUsages().at(0)).parse();
         const auto ranklist = CommandUsageParser(primebds::utils::rankListUsages().at(0)).parse();
         const auto rankinfo = CommandUsageParser(primebds::utils::rankInfoUsages().at(0)).parse();

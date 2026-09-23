@@ -319,7 +319,7 @@ namespace primebds::permissions {
         // Access the plugin's DB through the server — safe cast since we own the plugin
         auto *pb = dynamic_cast<PrimeBDS *>(&plugin);
         if (pb && pb->db)
-            pb->db->setUserRank(player.getXuid(), "Default");
+            pb->db->assignRank(player.getXuid(), "Default");
 
         return "Default";
     }

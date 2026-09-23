@@ -307,6 +307,11 @@ namespace primebds {
             reconcilePlayerState(player);
             db->clearPendingStateReset(player.getXuid());
         }
+        // Deliver only after permissions and gameplay state successfully synchronize.
+        // The stored baseline survives offline changes/restarts; restoration is silent.
+        if (const auto rank = db->pendingRankNotice(player.getXuid()))
+            player.sendMessage("§aYour rank is now §e" + *rank + "§r");
+        db->clearPendingRankNotice(player.getXuid());
         permissions_pending.erase(player.getXuid());
         return true;
     }
@@ -410,7 +415,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.11", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.12", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

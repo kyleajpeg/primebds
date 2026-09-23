@@ -1,4 +1,5 @@
 #include "primebds/utils/hierarchy.h"
+#include "primebds/utils/player_display.h"
 /// @file command_intercept.cpp
 /// Command preprocessing: moderation command remapping, exemption checks.
 
@@ -36,7 +37,7 @@ namespace primebds::handlers::preprocesses {
         PARSE_COMMANDS.insert(MODERATION_COMMANDS.begin(), MODERATION_COMMANDS.end());
         PARSE_COMMANDS.insert(MSG_CMDS.begin(), MSG_CMDS.end());
         PARSE_COMMANDS.insert({"op", "deop", "allowlist", "whitelist", "transfer",
-                               "teleport", "tp", "stop"});
+                               "teleport", "tp", "stop", "list"});
     }
 
     static std::vector<std::string> splitCommand(const std::string &command) {
@@ -85,6 +86,12 @@ namespace primebds::handlers::preprocesses {
                 return player.hasPermission(std::string(permission));
             })) {
             player.sendMessage("You do not have permission to use this command.");
+            event.setCancelled(true);
+            return;
+        }
+
+        if (cmd == "list" && args.size() == 1) {
+            utils::sendRankedPlayerList(plugin, player);
             event.setCancelled(true);
             return;
         }
@@ -343,6 +350,13 @@ namespace primebds::handlers::preprocesses {
 
         auto &server = plugin.getServer();
         auto &sender = server.getCommandSender();
+
+        if (cmd == "list" && args.size() == 1) {
+            if (sender.hasPermission("minecraft.command.list")) utils::sendRankedPlayerList(plugin, sender);
+            else sender.sendMessage("You do not have permission to use this command.");
+            event.setCancelled(true);
+            return;
+        }
 
         // Stop - kick all
         if (cmd == "stop") {

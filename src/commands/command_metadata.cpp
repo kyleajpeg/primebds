@@ -591,6 +591,8 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .usages("/primebds (config|command|info|reloadconfig)[action: pbds_action]")
         .permissions("primebds.command.primebds");
 
+    cmd(b, "playerrank").description("Check your rank or another player's saved rank")
+        .usages(utils::playerRankUsages()).permissions("primebds.command.playerrank");
     cmd(b, "rankset").description("Assign an existing rank to a player")
         .usages(utils::rankSetUsages()).permissions("primebds.command.rank.set");
     cmd(b, "ranklist").description("List ranks by descending weight")

@@ -30,6 +30,10 @@ int main() {
     for (const auto *command : {"me", "tell", "w", "whisper", "msg"})
         check(canInterceptPlayerCommand(command, has), "ordinary member chat alias was blocked");
 
+    check(!canInterceptPlayerCommand("list", has), "List replacement cannot bypass native permission");
+    grants.insert("minecraft.command.list");
+    check(canInterceptPlayerCommand("list", has), "Native list permission permits ranked list");
+
     // Both nodes are required because these aliases change a persistent rank.
     grants = {"minecraft.command.op"};
     check(!canInterceptPlayerCommand("op", has), "native op grant bypassed rank authorization");

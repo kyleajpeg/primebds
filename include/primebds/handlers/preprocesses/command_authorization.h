@@ -15,7 +15,7 @@ bool canInterceptPlayerCommand(std::string_view command, HasPermission has_permi
         {"kick", "minecraft.command.kick"}, {"stop", "minecraft.command.stop"},
         {"teleport", "minecraft.command.teleport"}, {"tp", "minecraft.command.teleport"},
         {"allowlist", "minecraft.command.allowlist"}, {"whitelist", "minecraft.command.allowlist"},
-        {"transfer", "minecraft.command.transfer"},
+        {"transfer", "minecraft.command.transfer"}, {"list", "minecraft.command.list"},
         {"ban", "endstone.command.ban"}, {"ban-ip", "endstone.command.banip"},
         {"banlist", "endstone.command.banlist"},
         {"pardon", "endstone.command.unban"}, {"unban", "endstone.command.unban"},

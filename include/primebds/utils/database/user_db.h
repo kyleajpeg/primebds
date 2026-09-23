@@ -77,6 +77,9 @@ namespace primebds::db {
         std::map<std::string, std::string> getInternalPermissions(const std::string &xuid);
         void setUserRank(const std::string &xuid, const std::string &rank);
         void assignRank(const std::string &xuid, const std::string &rank);
+        std::optional<std::string> pendingRankNotice(const std::string &xuid);
+        void clearPendingRankNotice(const std::string &xuid);
+        std::optional<User> getUniqueUserByName(const std::string &name);
         int pendingStateReset(const std::string &xuid);
         void clearPendingStateReset(const std::string &xuid);
         void resetUnavailableSettings(const std::string &xuid, const std::map<std::string, bool> &permissions);

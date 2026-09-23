@@ -31,8 +31,7 @@ namespace primebds::commands {
             const auto rank = console ? hierarchy::Rank{"Owner", 0} : hierarchy::playerRank(plugin, sender.getName());
             if (!console && (!player || !rank.weight)) return false;
             plugin.globalmute = {true, console, player ? player->getXuid() : "", rank};
-            plugin.getServer().broadcastMessage("\u00a7c\u00a7lGlobal mute has been enabled by " + sender.getName() +
-                (console || hierarchy::privileged(rank) ? "" : " (lower ranks only)"));
+            plugin.getServer().broadcastMessage("\u00a7c\u00a7lGlobal mute has been enabled by " + sender.getName());
         }
         return true;
     }

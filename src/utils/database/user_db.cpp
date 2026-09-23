@@ -43,6 +43,9 @@ namespace primebds::db {
         if (std::find(user_columns.begin(), user_columns.end(), "pending_state_reset") == user_columns.end())
             execute("ALTER TABLE users ADD COLUMN pending_state_reset INTEGER NOT NULL DEFAULT 0");
 
+        if (std::find(user_columns.begin(), user_columns.end(), "pending_rank_notice_from") == user_columns.end())
+            execute("ALTER TABLE users ADD COLUMN pending_rank_notice_from TEXT DEFAULT NULL");
+
         createTable("mod_logs", {{"xuid", "TEXT UNIQUE NOT NULL"},
                                  {"name", "TEXT"},
                                  {"is_muted", "INTEGER DEFAULT 0"},
@@ -684,8 +687,22 @@ namespace primebds::db {
     // Preserve offline preferences. The next successful permission sync reconciles
     // against the latest saved rank, never intermediate offline assignments.
     void UserDB::assignRank(const std::string &xuid, const std::string &rank) {
-        execute("UPDATE users SET internal_rank = ?, pending_state_reset = 1 WHERE xuid = ?", {rank, xuid});
+        execute("UPDATE users SET pending_rank_notice_from = COALESCE(pending_rank_notice_from, internal_rank), "
+                "internal_rank = ?, pending_state_reset = 1 WHERE xuid = ? AND lower(internal_rank) != lower(?)",
+                {rank, xuid, rank});
         invalidateUserCache(xuid);
+    }
+    std::optional<std::string> UserDB::pendingRankNotice(const std::string &xuid) {
+        auto row = queryRow("SELECT internal_rank FROM users WHERE xuid = ? "
+            "AND pending_rank_notice_from IS NOT NULL AND lower(pending_rank_notice_from) != lower(internal_rank)", {xuid});
+        return row ? std::optional<std::string>(row->at("internal_rank")) : std::nullopt;
+    }
+    void UserDB::clearPendingRankNotice(const std::string &xuid) {
+        execute("UPDATE users SET pending_rank_notice_from = NULL WHERE xuid = ?", {xuid});
+    }
+    std::optional<User> UserDB::getUniqueUserByName(const std::string &name) {
+        const auto rows = query("SELECT xuid FROM users WHERE name = ? COLLATE NOCASE", {name});
+        return rows.size() == 1 ? getUserByXuid(rows[0].at("xuid")) : std::nullopt;
     }
     int UserDB::pendingStateReset(const std::string &xuid) {
         auto row = queryRow("SELECT pending_state_reset FROM users WHERE xuid = ?", {xuid});

@@ -120,6 +120,46 @@ int main() {
             check(reopened.getWarnings("one").size()==3, "Warnings survive repeated startup");
             check(!reopened.getUserByName("Never Joined"), "Unknown players are not fabricated");
         }
+        {
+            db::UserDB database(path);
+            database.saveUser("notice","notice-uuid","Spaced Gamertag",1,"os","device",1,"version");
+            check(!database.pendingRankNotice("notice"), "New users receive no rank-change notice");
+            database.assignRank("notice","DEFAULT");
+            check(!database.pendingRankNotice("notice") && !database.pendingStateReset("notice"), "Same rank ignores case and queues nothing");
+            database.assignRank("notice","Admin");
+            check(database.pendingRankNotice("notice") == "Admin", "Online notification waits for successful sync");
+            check(database.pendingRankNotice("notice") == "Admin", "Failed/deferred synchronization must not consume a notice");
+            database.clearPendingRankNotice("notice");
+            check(!database.pendingRankNotice("notice"), "Acknowledged online notice is not repeated");
+            database.assignRank("notice","Moderator");
+            database.assignRank("notice","Default");
+            database.assignRank("notice","ADMIN");
+            check(!database.pendingRankNotice("notice"), "Offline restoration is silent and case-insensitive");
+            database.clearPendingRankNotice("notice");
+            database.assignRank("notice","Moderator");
+            check(database.getUniqueUserByName("SPACED GAMERTAG")->xuid == "notice", "Exact case-insensitive offline lookup accepts spaces");
+            check(!database.getUniqueUserByName("Spaced") && !database.getUniqueUserByName("@a"), "Partial names and selectors are not offline identities");
+            database.saveUser("collision","other-uuid","Spaced Gamertag",1,"os","device",1,"version");
+            check(!database.getUniqueUserByName("Spaced Gamertag"), "Ambiguous historical names are rejected");
+        }
+        {
+            db::UserDB database(path);
+            check(database.pendingRankNotice("notice") == "Moderator", "Final offline notice survives restart");
+            database.clearPendingRankNotice("notice");
+            database.assignRank("notice","Default");
+            check(database.pendingRankNotice("notice") == "Default", "Deleted-rank fallback uses the same notification lifecycle");
+            database.clearPendingRankNotice("notice");
+            // Simulate a pre-.12 database with existing ranks and a pending gameplay reset.
+            database.execute("ALTER TABLE users DROP COLUMN pending_rank_notice_from");
+        }
+        {
+            db::UserDB database(path);
+            check(database.getUserByXuid("notice")->internal_rank == "Default", "Migration preserves assigned ranks");
+            check(!database.pendingRankNotice("notice"), "Migration does not invent historical rank notifications");
+            check(database.pendingStateReset("notice"), "Migration preserves pending gameplay reconciliation");
+            database.assignRank("notice","Owner");
+            check(database.pendingRankNotice("notice") == "Owner", "Migrated records support new changes");
+        }
         std::map<std::string,bool> grouped{{"primebds.command",true}, {"primebds.command.speed",false},
             {"primebds.minecraft.op",false}, {"minecraft.command",true}, {"minecraft.command.op",false}};
         utils::applyPluginPermissionGroups(grouped);
