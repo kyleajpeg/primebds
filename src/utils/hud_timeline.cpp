@@ -62,7 +62,7 @@ void PrimeBDS::observeHudPacket(endstone::PacketReceiveEvent &event) {
         *task_id = task->getTaskId();
         hud_marker_tasks.insert(*task_id);
     } else {
-        getLogger().warn("{} event=packet.loading.end.marker-not-scheduled", stamp);
+        getLogger().warning("{} event=packet.loading.end.marker-not-scheduled", stamp);
     }
 }
 
