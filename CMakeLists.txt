@@ -106,6 +106,9 @@ if(PRIMEBDS_BUILD_TESTS)
     add_test(NAME hierarchy_coverage COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_SOURCE_DIR}/tests/hierarchy_coverage.py ${CMAKE_SOURCE_DIR})
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_executable(hud_timeline_test tests/hud_timeline_test.cpp)
+        target_include_directories(hud_timeline_test PRIVATE include)
+        add_test(NAME hud_timeline COMMAND hud_timeline_test)
         add_executable(hud_diagnostic_test tests/hud_diagnostic_test.cpp
             src/utils/database/user_db.cpp src/utils/database/database_manager.cpp)
         target_include_directories(hud_diagnostic_test PRIVATE include)

@@ -157,3 +157,35 @@ assert "[HUDTest]" in plugin and "getHealth()" in plugin, "Diagnostics must incl
 workflow = read(".github/workflows/build.yml")
 assert "branches: [chromevale-permissions-fix, chromevale-health-hud-test]" in workflow
 print("HUD join-only component gates, both flight/synchronization sites, original setter ordering, failure/completion and console wiring checked.")
+
+# Build 3 observes loading and repair timing without implementing a repair.
+timeline = without_comments(read("src/utils/hud_timeline.cpp"))
+assert 'EventPriority::Monitor, false' in plugin
+assert 'registerEvent(&EventListener::onHudPacket,' in plugin
+assert 'packet_id != 113 && packet_id != 312' in timeline
+assert 'stage=before-native-handling' in timeline
+assert 'event.isCancelled()' in timeline
+assert 'event.getAddress()' in timeline and 'event.getSubClientId()' in timeline
+assert 'decodeHudLoadingPacket(payload)' in timeline and 'hudPayloadHex(payload)' in timeline
+assert 'hud_timeline.active(uuid, session)' in timeline
+assert 'hud_timeline.generation() != generation' in timeline
+assert 'const auto name = player ?' in timeline and 'const auto uuid = player ?' in timeline
+callback = timeline.split('[this, uuid, name, session,', 1)[1].split('if (task)', 1)[0]
+for forbidden in ('getPlayer(', 'player->', 'reloadCustomPerms(', 'reconcilePlayerState(', 'setWalkSpeed(', 'setFlySpeed('):
+    assert forbidden not in callback, f'Log marker must not access/mutate player state: {forbidden}'
+for forbidden in ('setPayload(', 'setCancelled(', 'sendMessage(', 'sendPacket(', 'dispatchCommand(', 'db->'):
+    assert forbidden not in timeline, f'Packet observer must remain read-only: {forbidden}'
+assert 'hud_timeline.start(player.getUniqueId().str())' in plugin
+assert 'hud_timeline.end(event.getPlayer().getUniqueId().str())' in plugin
+assert 'hud_timeline.clear()' in plugin and 'cancelTask(task)' in plugin
+assert 'event=join.next-tick-sync' in join
+assert 'event=reconcile.begin' in reconcile and 'event=reconcile.end' in reconcile
+assert 'hudStamp(&player)' in sync and 'hudStamp(&player)' in reconcile
+speed = without_comments(read('src/commands/movement/speed.cpp'))
+assert speed.count('player->setWalkSpeed(') == 1 and speed.count('player->setFlySpeed(') == 1
+for kind in ('Walk', 'Fly'):
+    assert f'!request->query && (mode == Mode::{kind} || mode == Mode::Both)' in speed
+    assert f'event=manual-speed.begin setter=set{kind}Speed' in speed
+    assert f'event=manual-speed.end setter=set{kind}Speed' in speed
+assert '3.4.3-chromevale.12-hudtest.3' in plugin
+print('Loading observer, session-bound log markers, lifecycle timestamps and manual speed instrumentation checked.')

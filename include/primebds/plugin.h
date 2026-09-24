@@ -14,6 +14,7 @@
 #include "primebds/utils/admin_commands.h"
 #include "primebds/utils/rank_tools.h"
 #include "primebds/utils/hud_diagnostic.h"
+#include "primebds/utils/hud_timeline.h"
 
 // Handler includes (split organization)
 #include "primebds/handlers/actions.h"
@@ -30,6 +31,7 @@
 #include "primebds/handlers/preprocesses/command_intercept.h"
 
 #include <endstone/endstone.hpp>
+#include <endstone/event/server/packet_receive_event.h>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -56,6 +58,10 @@ namespace primebds {
         void reconcilePlayerState(endstone::Player &player, const utils::HudSyncContext &context, const char *reason);
         void logHudState(endstone::Player &player, const utils::HudSyncContext &context, const char *phase, const char *reason);
         utils::HudTestState hud_test;
+        utils::HudTimeline hud_timeline;
+        std::set<int> hud_marker_tasks;
+        std::string hudStamp(const endstone::Player *player = nullptr) const;
+        void observeHudPacket(endstone::PacketReceiveEvent &event);
         void maintainGodMode(endstone::Player &player, bool refill_hunger = true);
         std::set<std::string> permissions_pending;
 
@@ -126,6 +132,7 @@ namespace primebds {
         void onEntityDamage(endstone::ActorDamageEvent &event);
         void onEntityKnockback(endstone::ActorKnockbackEvent &event);
         void onPlayerLogin(endstone::PlayerLoginEvent &event);
+        void onHudPacket(endstone::PacketReceiveEvent &event);
         void onPlayerJoin(endstone::PlayerJoinEvent &event);
         void onPlayerQuit(endstone::PlayerQuitEvent &event);
         void onPlayerKick(endstone::PlayerKickEvent &event);

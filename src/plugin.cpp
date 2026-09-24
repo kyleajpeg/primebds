@@ -55,6 +55,7 @@ namespace primebds {
         // Register event listener
         listener_ = std::make_unique<EventListener>(*this);
         registerEvent(&EventListener::onPlayerLogin, *listener_);
+        registerEvent(&EventListener::onHudPacket, *listener_, endstone::EventPriority::Monitor, false);
         registerEvent(&EventListener::onPlayerJoin, *listener_);
         registerEvent(&EventListener::onPlayerQuit, *listener_);
         registerEvent(&EventListener::onPlayerKick, *listener_);
@@ -98,6 +99,10 @@ namespace primebds {
 
     void PrimeBDS::onDisable() {
         getLogger().info("PrimeBDS v{} disabled.", getDescription().getVersion());
+
+        for (const auto task : hud_marker_tasks) getServer().getScheduler().cancelTask(task);
+        hud_marker_tasks.clear();
+        hud_timeline.clear();
 
         if (god_maintenance_task_ >= 0) {
             getServer().getScheduler().cancelTask(god_maintenance_task_);
@@ -164,26 +169,24 @@ namespace primebds {
     void PrimeBDS::logHudState(endstone::Player &player, const utils::HudSyncContext &context,
                                const char *phase, const char *reason) {
         if (!player.isValid()) {
-            getLogger().info("[HUDTest] sync={} phase={} reason={} state=unavailable-invalid-player", context.id, phase, reason);
+            getLogger().info("{} sync={} phase={} reason={} state=unavailable-invalid-player", hudStamp(&player), context.id, phase, reason);
             return;
         }
-        getLogger().info("[HUDTest] sync={} phase={} reason={} gamemode={} allow_flight={} flying={} walk_raw={} fly_raw={} health={} max_health={} god={}",
-            context.id, phase, reason, static_cast<int>(player.getGameMode()), player.getAllowFlight(), player.isFlying(),
+        getLogger().info("{} sync={} phase={} reason={} gamemode={} allow_flight={} flying={} walk_raw={} fly_raw={} health={} max_health={} god={}", hudStamp(&player), context.id, phase, reason, static_cast<int>(player.getGameMode()), player.getAllowFlight(), player.isFlying(),
             player.getWalkSpeed(), player.getFlySpeed(), player.getHealth(), player.getMaxHealth(), isgod.enabled(player));
         if (const auto user = db->getUserByXuid(player.getXuid())) {
-            getLogger().info("[HUDTest] sync={} phase={} reason={} msgtoggle={} socialspy={} modspy={} altspy={} staffchat={} afk={}",
-                context.id, phase, reason, user->enabled_mt, user->enabled_ss, user->enabled_ms,
+            getLogger().info("{} sync={} phase={} reason={} msgtoggle={} socialspy={} modspy={} altspy={} staffchat={} afk={}", hudStamp(&player), context.id, phase, reason, user->enabled_mt, user->enabled_ss, user->enabled_ms,
                 user->enabled_as, user->enabled_sc, user->is_afk);
         }
     }
 
     void PrimeBDS::reconcilePlayerState(endstone::Player &player, const utils::HudSyncContext &context, const char *reason) {
+        getLogger().info("{} sync={} event=reconcile.begin reason={}", hudStamp(&player), context.id, reason);
         logHudState(player, context, "before", reason);
         using utils::HudComponent;
         const auto diagnosticStep = [&](HudComponent component, const char *operation, bool eligible, auto &&apply) {
             const auto record = [&](utils::HudStepResult result) {
-                getLogger().info("[HUDTest] sync={} reason={} component={} operation={} eligible={} enabled={} action={}",
-                    context.id, reason, utils::hudComponentName(component), operation, eligible, context.allows(component),
+                getLogger().info("{} sync={} reason={} component={} operation={} eligible={} enabled={} action={}", hudStamp(&player), context.id, reason, utils::hudComponentName(component), operation, eligible, context.allows(component),
                     utils::hudStepResultName(result));
             };
             const auto result = utils::runHudStep(context, component, eligible, [&]() {
@@ -226,7 +229,7 @@ namespace primebds {
         const bool revoke_mode = !utils::mayKeepGameMode(static_cast<int>(mode), [&](const std::string &node) {
                 return player.hasPermission(node);
             });
-        getLogger().info("[HUDTest] sync={} reason={} candidate=setGameMode current={} requested=0", context.id, reason, static_cast<int>(mode));
+        getLogger().info("{} sync={} reason={} candidate=setGameMode current={} requested=0", hudStamp(&player), context.id, reason, static_cast<int>(mode));
         diagnosticStep(HudComponent::GameMode, "setGameMode", revoke_mode, [&]() {
             player.setGameMode(endstone::GameMode::Survival);
         });
@@ -234,14 +237,14 @@ namespace primebds {
         const auto current_mode = player.getGameMode();
         if (!has("fly") && current_mode != endstone::GameMode::Creative &&
             current_mode != endstone::GameMode::Spectator) {
-            getLogger().info("[HUDTest] sync={} reason={} candidate=setFlying current={} requested=false", context.id, reason, player.isFlying());
+            getLogger().info("{} sync={} reason={} candidate=setFlying current={} requested=false", hudStamp(&player), context.id, reason, player.isFlying());
             diagnosticStep(HudComponent::Flying, "setFlying", true, [&]() { player.setFlying(false); });
-            getLogger().info("[HUDTest] sync={} reason={} candidate=setAllowFlight current={} requested=false", context.id, reason, player.getAllowFlight());
+            getLogger().info("{} sync={} reason={} candidate=setAllowFlight current={} requested=false", hudStamp(&player), context.id, reason, player.getAllowFlight());
             diagnosticStep(HudComponent::AllowFlight, "setAllowFlight", true, [&]() { player.setAllowFlight(false); });
         } else if (has("fly") && mode != current_mode) {
-            getLogger().info("[HUDTest] sync={} reason={} candidate=setAllowFlight current={} requested={}", context.id, reason, player.getAllowFlight(), allowed_flight);
+            getLogger().info("{} sync={} reason={} candidate=setAllowFlight current={} requested={}", hudStamp(&player), context.id, reason, player.getAllowFlight(), allowed_flight);
             diagnosticStep(HudComponent::AllowFlight, "setAllowFlight", true, [&]() { player.setAllowFlight(allowed_flight); });
-            getLogger().info("[HUDTest] sync={} reason={} candidate=setFlying current={} requested={}", context.id, reason, player.isFlying(), allowed_flight && was_flying);
+            getLogger().info("{} sync={} reason={} candidate=setFlying current={} requested={}", hudStamp(&player), context.id, reason, player.isFlying(), allowed_flight && was_flying);
             diagnosticStep(HudComponent::Flying, "setFlying", true, [&]() { player.setFlying(allowed_flight && was_flying); });
         } else {
             diagnosticStep(HudComponent::Flying, "setFlying", false, []() {});
@@ -249,15 +252,16 @@ namespace primebds {
         }
         // Preserve .12's unconditional calls and their order, including identical values.
         const auto requested_walk = has("speed") ? walk_speed : utils::NormalWalkSpeed;
-        getLogger().info("[HUDTest] sync={} reason={} candidate=setWalkSpeed current={} requested={}", context.id, reason, player.getWalkSpeed(), requested_walk);
+        getLogger().info("{} sync={} reason={} candidate=setWalkSpeed current={} requested={}", hudStamp(&player), context.id, reason, player.getWalkSpeed(), requested_walk);
         diagnosticStep(HudComponent::WalkSpeed, "setWalkSpeed", true, [&]() { player.setWalkSpeed(requested_walk); });
         const auto requested_fly = has("speed") ? fly_speed : utils::NormalFlySpeed;
-        getLogger().info("[HUDTest] sync={} reason={} candidate=setFlySpeed current={} requested={}", context.id, reason, player.getFlySpeed(), requested_fly);
+        getLogger().info("{} sync={} reason={} candidate=setFlySpeed current={} requested={}", hudStamp(&player), context.id, reason, player.getFlySpeed(), requested_fly);
         diagnosticStep(HudComponent::FlySpeed, "setFlySpeed", true, [&]() { player.setFlySpeed(requested_fly); });
         diagnosticStep(HudComponent::NameTag, "setNameTag", !has("nickname") && !has("nickname.other"), [&]() {
             player.setNameTag(player.getName());
         });
         logHudState(player, context, "after", reason);
+        getLogger().info("{} sync={} event=reconcile.end reason={}", hudStamp(&player), context.id, reason);
     }
 
     std::map<std::string, bool> PrimeBDS::savedPermissions(const std::string &xuid, const std::string &rank) {
@@ -312,10 +316,9 @@ namespace primebds {
 
     bool PrimeBDS::reloadCustomPerms(endstone::Player &player, utils::SyncOrigin origin) {
         const auto context = hud_test.beginSync(origin);
-        getLogger().info("[HUDTest] sync={} phase=start player={} origin={} mode={} pending_before={}",
-            context.id, player.getName(), utils::hudOriginName(context.origin), utils::hudModeName(context.mode),
+        getLogger().info("{} sync={} phase=start player={} origin={} mode={} pending_before={}", hudStamp(&player), context.id, player.getName(), utils::hudOriginName(context.origin), utils::hudModeName(context.mode),
             db->pendingStateReset(player.getXuid()));
-        getLogger().info("[HUDTest] sync={} selection_mask={} enabled={} disabled={} effective={}", context.id,
+        getLogger().info("{} sync={} selection_mask={} enabled={} disabled={} effective={}", hudStamp(&player), context.id,
             context.selection, utils::hudSelectionList(context.selection), utils::hudSelectionList(context.selection, false),
             utils::hudSelectionList(context.origin == utils::SyncOrigin::Live ? utils::HudAllComponents : context.selection));
         auto &pm = permissions::PermissionManager::instance();
@@ -329,7 +332,7 @@ namespace primebds {
                          player.getGameVersion());
             user = db->getOnlineUser(player.getXuid());
             if (!user) {
-                getLogger().error("[HUDTest] sync={} phase=failed reason=missing-user pending-work-not-consumed", context.id);
+                getLogger().error("{} sync={} phase=failed reason=missing-user pending-work-not-consumed", hudStamp(&player), context.id);
                 return false;
             }
         }
@@ -337,7 +340,7 @@ namespace primebds {
         std::string internal_rank = pm.checkRankExists(*this, player, user->internal_rank);
         auto final_permissions = savedPermissions(player.getXuid(), internal_rank);
         const bool fallback = hierarchy::lower(internal_rank) != hierarchy::lower(user->internal_rank);
-        getLogger().info("[HUDTest] sync={} phase=resolved final_rank={} fallback={} pending={}", context.id,
+        getLogger().info("{} sync={} phase=resolved final_rank={} fallback={} pending={}", hudStamp(&player), context.id,
             internal_rank, fallback, db->pendingStateReset(player.getXuid()));
 
         {
@@ -357,7 +360,7 @@ namespace primebds {
         // Create new attachment and apply all permissions
         auto *attachment = player.addAttachment(*this, "primebdsoverride", true);
         if (!attachment) {
-            getLogger().error("[HUDTest] sync={} phase=failed reason=no-permission-attachment pending-work-not-consumed", context.id);
+            getLogger().error("{} sync={} phase=failed reason=no-permission-attachment pending-work-not-consumed", hudStamp(&player), context.id);
             return false;
         }
 
@@ -380,11 +383,11 @@ namespace primebds {
         const auto diagnosticReconcile = [&](const char *reason) {
             utils::runHudReconciliation(context, [&]() {
                 ++executed;
-                getLogger().info("[HUDTest] sync={} reason={} action=execute", context.id, reason);
+                getLogger().info("{} sync={} reason={} action=execute", hudStamp(&player), context.id, reason);
                 reconcilePlayerState(player, context, reason);
             }, [&]() {
                 ++skipped;
-                getLogger().info("[HUDTest] sync={} reason={} action=skip", context.id, reason);
+                getLogger().info("{} sync={} reason={} action=skip", hudStamp(&player), context.id, reason);
                 logHudState(player, context, "skipped", reason);
             });
         };
@@ -402,8 +405,7 @@ namespace primebds {
             player.sendMessage("§aYour rank is now §e" + *rank + "§r");
         db->clearPendingRankNotice(player.getXuid());
         permissions_pending.erase(player.getXuid());
-        getLogger().info("[HUDTest] sync={} phase=complete player={} final_rank={} origin={} mode={} executed={} skipped={} pending_after={} notices_consumed=true commands_unblocked=true",
-            context.id, player.getName(), internal_rank, utils::hudOriginName(context.origin), utils::hudModeName(context.mode),
+        getLogger().info("{} sync={} phase=complete player={} final_rank={} origin={} mode={} executed={} skipped={} pending_after={} notices_consumed=true commands_unblocked=true", hudStamp(&player), context.id, player.getName(), internal_rank, utils::hudOriginName(context.origin), utils::hudModeName(context.mode),
             executed, skipped, db->pendingStateReset(player.getXuid()));
         return true;
     }
@@ -460,14 +462,25 @@ namespace primebds {
     }
 
     void EventListener::onPlayerLogin(endstone::PlayerLoginEvent &event) {
+        auto &player = event.getPlayer();
+        plugin_.hud_timeline.start(player.getUniqueId().str());
+        plugin_.getLogger().info("{} event=login address={}:{}", plugin_.hudStamp(&player),
+            player.getAddress().getHostname(), player.getAddress().getPort());
         handlers::connections::handleLoginEvent(plugin_, event);
+        if (event.isCancelled()) {
+            plugin_.getLogger().info("{} event=login.cancelled", plugin_.hudStamp(&player));
+            plugin_.hud_timeline.end(player.getUniqueId().str());
+        }
     }
 
     void EventListener::onPlayerJoin(endstone::PlayerJoinEvent &event) {
+        plugin_.getLogger().info("{} event=join.handler-entry", plugin_.hudStamp(&event.getPlayer()));
         handlers::connections::handleJoinEvent(plugin_, event);
     }
 
     void EventListener::onPlayerQuit(endstone::PlayerQuitEvent &event) {
+        plugin_.getLogger().info("{} event=disconnect", plugin_.hudStamp(&event.getPlayer()));
+        plugin_.hud_timeline.end(event.getPlayer().getUniqueId().str());
         handlers::connections::handleLeaveEvent(plugin_, event);
     }
 
@@ -507,7 +520,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.12-hudtest.2", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.12-hudtest.3", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 
