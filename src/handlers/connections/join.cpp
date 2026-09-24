@@ -81,7 +81,7 @@ namespace primebds::handlers::connections {
         plugin.getServer().getScheduler().runTask(plugin, [&plugin, uuid]() {
             auto *p = plugin.getServer().getPlayer(uuid);
             if (p)
-                plugin.reloadCustomPerms(*p);
+                plugin.reloadCustomPerms(*p, utils::SyncOrigin::Join);
         });
 
         // Ban check - suppress join message if banned

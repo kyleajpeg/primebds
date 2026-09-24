@@ -126,7 +126,7 @@ inline CommandPolicy commandPolicy(const std::string &name) {
         // Explicitly delegable shared settings; no individual player target exists.
         add(CommandPolicy::Shared, "motd setrules sethomes setspawn warps");
         add(CommandPolicy::Owner, "setback primebds reloadscripts updatepacks");
-        add(CommandPolicy::Console, "alist ipban ipmute");
+        add(CommandPolicy::Console, "hudtest alist ipban ipmute");
         p.emplace("globalmute", CommandPolicy::Ordinary); // Scope and issuer checked inside the handler.
         add(CommandPolicy::Rank, "rank rankset ranklist rankinfo");
         p.emplace("permissions", CommandPolicy::Permissions);

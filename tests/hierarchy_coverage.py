@@ -99,7 +99,7 @@ assert intercept.count('if (cmd == "list" && args.size() == 1)') == 2
 assert intercept.index('canInterceptPlayerCommand(') < intercept.index('utils::sendRankedPlayerList(plugin, player)')
 assert '{"list", "minecraft.command.list"}' in (root/'include/primebds/handlers/preprocesses/command_authorization.h').read_text(encoding='utf-8')
 plugin = (root/'src/plugin.cpp').read_text(encoding='utf-8').split('bool PrimeBDS::reloadCustomPerms(',1)[1]
-assert plugin.index('if (!attachment)') < plugin.index('reconcilePlayerState(player)') < plugin.index('pendingRankNotice(') < plugin.index('clearPendingRankNotice(')
+assert plugin.index('if (!attachment)') < plugin.index('diagnosticReconcile("pending")') < plugin.index('pendingRankNotice(') < plugin.index('clearPendingRankNotice(')
 assert 'Your rank is now' in plugin
 assert 'assignRank(player.getXuid(), "Default")' in (root/'src/utils/permissions/permission_manager.cpp').read_text(encoding='utf-8')
 assert '(lower ranks only)' not in mute

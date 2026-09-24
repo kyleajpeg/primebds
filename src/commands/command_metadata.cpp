@@ -600,6 +600,10 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
     cmd(b, "rankinfo").description("Inspect a rank definition")
         .usages(utils::rankInfoUsages()).permissions("primebds.command.rank.info");
 
+    cmd(b, "hudtest").description("Control the temporary join-reconciliation experiment from the console")
+        .usages("/hudtest (baseline|skip|status)<action: hudtest_action>")
+        .permissions("primebds.command.hudtest");
+
     cmd(b, "rank").description("Manage server ranks!")
         .usages(
             "/rank (set)<sub: rank_sub> <player: string> <rank: string>",

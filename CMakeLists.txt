@@ -105,6 +105,15 @@ if(PRIMEBDS_BUILD_TESTS)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_test(NAME hierarchy_coverage COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_SOURCE_DIR}/tests/hierarchy_coverage.py ${CMAKE_SOURCE_DIR})
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_executable(hud_diagnostic_test tests/hud_diagnostic_test.cpp
+            src/utils/database/user_db.cpp src/utils/database/database_manager.cpp)
+        target_include_directories(hud_diagnostic_test PRIVATE include)
+        target_link_libraries(hud_diagnostic_test PRIVATE nlohmann_json::nlohmann_json sqlite3)
+        add_test(NAME hud_diagnostic COMMAND hud_diagnostic_test)
+        add_test(NAME hud_diagnostic_wiring COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tests/hud_diagnostic_wiring.py ${CMAKE_SOURCE_DIR})
+    endif()
     add_executable(command_authorization_test tests/command_authorization_test.cpp)
     target_include_directories(command_authorization_test PRIVATE include)
     add_test(NAME command_authorization COMMAND command_authorization_test)

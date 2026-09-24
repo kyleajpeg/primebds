@@ -13,6 +13,7 @@
 #include "primebds/utils/intervals.h"
 #include "primebds/utils/admin_commands.h"
 #include "primebds/utils/rank_tools.h"
+#include "primebds/utils/hud_diagnostic.h"
 
 // Handler includes (split organization)
 #include "primebds/handlers/actions.h"
@@ -50,9 +51,11 @@ namespace primebds {
                        const std::vector<std::string> &args) override;
 
         // Re-apply custom permissions for a player
-        bool reloadCustomPerms(endstone::Player &player);
+        bool reloadCustomPerms(endstone::Player &player, utils::SyncOrigin origin = utils::SyncOrigin::Live);
         std::map<std::string, bool> savedPermissions(const std::string &xuid, const std::string &rank);
-        void reconcilePlayerState(endstone::Player &player);
+        void reconcilePlayerState(endstone::Player &player, const utils::HudSyncContext &context, const char *reason);
+        void logHudState(endstone::Player &player, const utils::HudSyncContext &context, const char *phase, const char *reason);
+        utils::HudTestState hud_test;
         void maintainGodMode(endstone::Player &player, bool refill_hunger = true);
         std::set<std::string> permissions_pending;
 
