@@ -50,7 +50,7 @@ namespace primebds {
     void PrimeBDS::onEnable() {
         getLogger().info("PrimeBDS v{} enabled.", getDescription().getVersion());
         hud_test = utils::HudTestState{};
-        getLogger().info("[HUDTest] mode=baseline scope=all-joins; console: hudtest <baseline|skip|status>; mode is not persisted.");
+        getLogger().info("[HUDTest] mode=baseline scope=all-joins; console: hudtest <baseline|skip|status> or hudtest <enable|disable> <component>; selection is not persisted.");
 
         // Register event listener
         listener_ = std::make_unique<EventListener>(*this);
@@ -179,54 +179,84 @@ namespace primebds {
 
     void PrimeBDS::reconcilePlayerState(endstone::Player &player, const utils::HudSyncContext &context, const char *reason) {
         logHudState(player, context, "before", reason);
+        using utils::HudComponent;
+        const auto diagnosticStep = [&](HudComponent component, const char *operation, bool eligible, auto &&apply) {
+            const auto record = [&](utils::HudStepResult result) {
+                getLogger().info("[HUDTest] sync={} reason={} component={} operation={} eligible={} enabled={} action={}",
+                    context.id, reason, utils::hudComponentName(component), operation, eligible, context.allows(component),
+                    utils::hudStepResultName(result));
+            };
+            const auto result = utils::runHudStep(context, component, eligible, [&]() {
+                record(utils::HudStepResult::Executed);
+                apply();
+            });
+            if (result != utils::HudStepResult::Executed) record(result);
+        };
         const auto has = [&](const std::string &node) { return player.hasPermission("primebds.command." + node); };
         std::map<std::string, bool> preferences;
         for (const auto *node : {"msgtoggle", "socialspy", "modspy", "altspy", "staffchat", "afk"})
             preferences["primebds.command." + std::string(node)] = has(node);
-        db->resetUnavailableSettings(player.getXuid(), preferences);
-        if (!has("god") && !has("god.other")) isgod.set(player, false);
-        if (!has("afk")) afk_cache.erase(player.getXuid());
+        diagnosticStep(HudComponent::Preferences, "resetUnavailableSettings", true, [&]() {
+            db->resetUnavailableSettings(player.getXuid(), preferences);
+        });
+        diagnosticStep(HudComponent::God, "revokeGod", !has("god") && !has("god.other"), [&]() {
+            isgod.set(player, false);
+        });
+        // This shares the preferences switch but retains its original position after god-mode cleanup.
+        diagnosticStep(HudComponent::Preferences, "clearAfkCache", !has("afk"), [&]() {
+            afk_cache.erase(player.getXuid());
+        });
         for (auto *intervals : {&monitor_intervals, &blockscan_intervals}) {
             const auto node = intervals == &monitor_intervals ? "monitor" : "blockscan";
-            if (has(node)) continue;
+            if (has(node)) {
+                diagnosticStep(HudComponent::Tasks, node, false, []() {});
+                continue;
+            }
             auto found = intervals->find(player.getName());
-            if (found != intervals->end()) {
+            diagnosticStep(HudComponent::Tasks, node, found != intervals->end(), [&]() {
                 getServer().getScheduler().cancelTask(found->second);
                 intervals->erase(found);
-            }
+            });
         }
         const auto mode = player.getGameMode();
         const bool allowed_flight = player.getAllowFlight();
         const bool was_flying = player.isFlying();
         const auto walk_speed = player.getWalkSpeed();
         const auto fly_speed = player.getFlySpeed();
-        if (!utils::mayKeepGameMode(static_cast<int>(mode), [&](const std::string &node) {
+        const bool revoke_mode = !utils::mayKeepGameMode(static_cast<int>(mode), [&](const std::string &node) {
                 return player.hasPermission(node);
-            })) {
-            getLogger().info("[HUDTest] sync={} reason={} setter=setGameMode current={} requested=0", context.id, reason, static_cast<int>(mode));
+            });
+        getLogger().info("[HUDTest] sync={} reason={} candidate=setGameMode current={} requested=0", context.id, reason, static_cast<int>(mode));
+        diagnosticStep(HudComponent::GameMode, "setGameMode", revoke_mode, [&]() {
             player.setGameMode(endstone::GameMode::Survival);
-        }
+        });
+        // Evaluate the real resulting mode; a disabled setter must not simulate a mode change.
         const auto current_mode = player.getGameMode();
         if (!has("fly") && current_mode != endstone::GameMode::Creative &&
             current_mode != endstone::GameMode::Spectator) {
-            getLogger().info("[HUDTest] sync={} reason={} setter=setFlying current={} requested=false", context.id, reason, player.isFlying());
-            player.setFlying(false);
-            getLogger().info("[HUDTest] sync={} reason={} setter=setAllowFlight current={} requested=false", context.id, reason, player.getAllowFlight());
-            player.setAllowFlight(false);
+            getLogger().info("[HUDTest] sync={} reason={} candidate=setFlying current={} requested=false", context.id, reason, player.isFlying());
+            diagnosticStep(HudComponent::Flying, "setFlying", true, [&]() { player.setFlying(false); });
+            getLogger().info("[HUDTest] sync={} reason={} candidate=setAllowFlight current={} requested=false", context.id, reason, player.getAllowFlight());
+            diagnosticStep(HudComponent::AllowFlight, "setAllowFlight", true, [&]() { player.setAllowFlight(false); });
         } else if (has("fly") && mode != current_mode) {
-            getLogger().info("[HUDTest] sync={} reason={} setter=setAllowFlight current={} requested={}", context.id, reason, player.getAllowFlight(), allowed_flight);
-            player.setAllowFlight(allowed_flight);
-            getLogger().info("[HUDTest] sync={} reason={} setter=setFlying current={} requested={}", context.id, reason, player.isFlying(), allowed_flight && was_flying);
-            player.setFlying(allowed_flight && was_flying);
+            getLogger().info("[HUDTest] sync={} reason={} candidate=setAllowFlight current={} requested={}", context.id, reason, player.getAllowFlight(), allowed_flight);
+            diagnosticStep(HudComponent::AllowFlight, "setAllowFlight", true, [&]() { player.setAllowFlight(allowed_flight); });
+            getLogger().info("[HUDTest] sync={} reason={} candidate=setFlying current={} requested={}", context.id, reason, player.isFlying(), allowed_flight && was_flying);
+            diagnosticStep(HudComponent::Flying, "setFlying", true, [&]() { player.setFlying(allowed_flight && was_flying); });
+        } else {
+            diagnosticStep(HudComponent::Flying, "setFlying", false, []() {});
+            diagnosticStep(HudComponent::AllowFlight, "setAllowFlight", false, []() {});
         }
         // Preserve .12's unconditional calls and their order, including identical values.
         const auto requested_walk = has("speed") ? walk_speed : utils::NormalWalkSpeed;
-        getLogger().info("[HUDTest] sync={} reason={} setter=setWalkSpeed current={} requested={}", context.id, reason, player.getWalkSpeed(), requested_walk);
-        player.setWalkSpeed(requested_walk);
+        getLogger().info("[HUDTest] sync={} reason={} candidate=setWalkSpeed current={} requested={}", context.id, reason, player.getWalkSpeed(), requested_walk);
+        diagnosticStep(HudComponent::WalkSpeed, "setWalkSpeed", true, [&]() { player.setWalkSpeed(requested_walk); });
         const auto requested_fly = has("speed") ? fly_speed : utils::NormalFlySpeed;
-        getLogger().info("[HUDTest] sync={} reason={} setter=setFlySpeed current={} requested={}", context.id, reason, player.getFlySpeed(), requested_fly);
-        player.setFlySpeed(requested_fly);
-        if (!has("nickname") && !has("nickname.other")) player.setNameTag(player.getName());
+        getLogger().info("[HUDTest] sync={} reason={} candidate=setFlySpeed current={} requested={}", context.id, reason, player.getFlySpeed(), requested_fly);
+        diagnosticStep(HudComponent::FlySpeed, "setFlySpeed", true, [&]() { player.setFlySpeed(requested_fly); });
+        diagnosticStep(HudComponent::NameTag, "setNameTag", !has("nickname") && !has("nickname.other"), [&]() {
+            player.setNameTag(player.getName());
+        });
         logHudState(player, context, "after", reason);
     }
 
@@ -285,6 +315,9 @@ namespace primebds {
         getLogger().info("[HUDTest] sync={} phase=start player={} origin={} mode={} pending_before={}",
             context.id, player.getName(), utils::hudOriginName(context.origin), utils::hudModeName(context.mode),
             db->pendingStateReset(player.getXuid()));
+        getLogger().info("[HUDTest] sync={} selection_mask={} enabled={} disabled={} effective={}", context.id,
+            context.selection, utils::hudSelectionList(context.selection), utils::hudSelectionList(context.selection, false),
+            utils::hudSelectionList(context.origin == utils::SyncOrigin::Live ? utils::HudAllComponents : context.selection));
         auto &pm = permissions::PermissionManager::instance();
         auto user = db->getOnlineUser(player.getXuid());
         if (!user) {
@@ -474,7 +507,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.12-hudtest.1", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.12-hudtest.2", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

@@ -1,6 +1,7 @@
 #include "primebds/utils/admin_commands.h"
 #include "primebds/utils/warning_command.h"
 #include "primebds/utils/rank_tools.h"
+#include "primebds/utils/hud_diagnostic.h"
 #include "endstone/core/command/command_usage_parser.h"
 #include <algorithm>
 #include <iostream>
@@ -10,6 +11,29 @@ using endstone::core::CommandUsageParser;
 void check(bool ok, const char *why) { if (!ok) throw std::runtime_error(why); }
 int main() {
     try {
+        int hud_modes = 0, hud_toggles = 0;
+        for (const auto &usage : primebds::utils::hudTestUsages()) {
+            const auto parsed = CommandUsageParser(usage).parse();
+            check(parsed.has_value(), "Endstone rejected diagnostic command syntax");
+            const auto &params = parsed->parameters;
+            check(!params.empty() && params[0].is_enum && !params[0].optional,
+                  "HUD diagnostic actions must be required advertised choices");
+            if (params[0].values == std::vector<std::string>{"baseline", "skip", "status"}) {
+                check(params.size() == 1, "HUD modes require no extra arguments");
+                ++hud_modes;
+            } else {
+                check(params[0].values == std::vector<std::string>{"enable", "disable"} && params.size() == 2 &&
+                          params[1].is_enum && !params[1].optional,
+                      "HUD toggles require exactly one advertised component");
+                const std::set<std::string> expected{"preferences", "god", "tasks", "gamemode", "flying",
+                    "allowflight", "walkspeed", "flyspeed", "nametag", "speeds", "flight"};
+                check(std::set<std::string>(params[1].values.begin(), params[1].values.end()) == expected &&
+                          params[1].values.size() == expected.size(),
+                      "All nine HUD components and two groups appear exactly once in syntax");
+                ++hud_toggles;
+            }
+        }
+        check(hud_modes == 1 && hud_toggles == 1, "Exactly two unambiguous HUD command forms are registered");
         const auto playerRank = CommandUsageParser(primebds::utils::playerRankUsages().at(0)).parse();
         check(playerRank && playerRank->parameters.size()==1 && playerRank->parameters[0].type=="string" &&
               playerRank->parameters[0].optional, "Player rank lookup accepts an optional offline gamertag");

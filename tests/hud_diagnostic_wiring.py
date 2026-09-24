@@ -21,12 +21,15 @@ sync = plugin.split("bool PrimeBDS::reloadCustomPerms(", 1)[1].split("void Prime
 header = without_comments(read("include/primebds/plugin.h"))
 join = without_comments(read("src/handlers/connections/join.cpp"))
 command = without_comments(read("src/commands/server/hudtest.cpp"))
+reconcile = plugin.split("void PrimeBDS::reconcilePlayerState(", 1)[1].split("std::map<std::string, bool> PrimeBDS::savedPermissions(", 1)[0]
 
 assert re.search(r"reloadCustomPerms\(endstone::Player\s*&player,\s*utils::SyncOrigin\s+origin\s*=\s*utils::SyncOrigin::Live\)", header), \
     "Existing callers must keep the Live default"
 assert "utils::SyncOrigin origin" in sync
 assert "beginSync(origin)" in sync, "Capture diagnostic mode once per synchronization"
 assert sync.count("beginSync(") == 1
+assert "context.selection" in sync and "selection_mask=" in sync and "effective=" in sync
+assert "hud_test = utils::HudTestState{}" in plugin, "Restart must restore the complete baseline selection"
 
 # Only the UUID-safe, existing join callback selects the diagnostic bypass origin.
 join_origin_calls = []
@@ -68,6 +71,74 @@ for forbidden in ("clearPending", "diagnosticReconcile(", "permissions_pending.e
 assert failure < fallback < pending < clear_pending
 assert "player.setOp(wants_op)" in sync, "Do not accidentally bypass native OP synchronization"
 
+# The pure helper tests every mask; verify real mutations cannot bypass its gate.
+# Parenthesis matching preserves callback bodies even when they contain nested calls.
+def calls(source, function):
+    masked = re.sub(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
+                    lambda match: " " * len(match[0]), source)
+    result = []
+    for match in re.finditer(r"\b" + re.escape(function) + r"\s*\(", masked):
+        depth = 1
+        end = match.end()
+        while depth:
+            assert end < len(masked), f"Unbalanced {function} call"
+            depth += (masked[end] == "(") - (masked[end] == ")")
+            end += 1
+        result.append(source[match.start():end])
+    return result
+
+
+steps = calls(reconcile, "diagnosticStep")
+assert reconcile.count("runHudStep(") == 1
+assert "runHudStep(context, component, eligible," in reconcile
+assert "context.allows(component)" in reconcile and "hudStepResultName(result)" in reconcile
+assert "hud_test" not in reconcile, "Each operation must use the captured context, not mutable global controls"
+assert 'logHudState(player, context, "before", reason)' in reconcile
+assert 'logHudState(player, context, "after", reason)' in reconcile
+
+for component, mutation, count in (
+    ("Preferences", "db->resetUnavailableSettings(", 1),
+    ("Preferences", "afk_cache.erase(", 1),
+    ("God", "isgod.set(", 1),
+    ("Tasks", "cancelTask(", 1),
+    ("Tasks", "intervals->erase(", 1),
+    ("GameMode", "player.setGameMode(", 1),
+    ("Flying", "player.setFlying(", 2),
+    ("AllowFlight", "player.setAllowFlight(", 2),
+    ("WalkSpeed", "player.setWalkSpeed(", 1),
+    ("FlySpeed", "player.setFlySpeed(", 1),
+    ("NameTag", "player.setNameTag(", 1),
+):
+    guarded = [step for step in steps if step.startswith(f"diagnosticStep(HudComponent::{component},")]
+    assert reconcile.count(mutation) == count, f"Unexpected mutation count: {mutation}"
+    assert sum(step.count(mutation) for step in guarded) == count, f"Ungated/wrong-component mutation: {mutation}"
+
+# Both flight branches and the unconditional speed calls keep .12 ordering.
+assert re.findall(r"player\.(set\w+)\(", reconcile) == [
+    "setGameMode", "setFlying", "setAllowFlight", "setAllowFlight", "setFlying",
+    "setWalkSpeed", "setFlySpeed", "setNameTag",
+], "Baseline setter ordering or number of call sites changed"
+assert reconcile.index("db->resetUnavailableSettings(") < reconcile.index("isgod.set(") < \
+       reconcile.index("afk_cache.erase(") < reconcile.index("cancelTask(") < reconcile.index("player.setGameMode(")
+for component, setter in (("WalkSpeed", "setWalkSpeed"), ("FlySpeed", "setFlySpeed")):
+    assert re.search(rf'diagnosticStep\(HudComponent::{component},\s*"{setter}",\s*true,', reconcile), \
+        "Speed calls must remain eligible even when old and requested values match"
+assert 'const auto requested_walk = has("speed") ? walk_speed : utils::NormalWalkSpeed;' in reconcile
+assert 'const auto requested_fly = has("speed") ? fly_speed : utils::NormalFlySpeed;' in reconcile
+assert 'const auto current_mode = player.getGameMode();' in reconcile
+assert reconcile.index("player.setGameMode(") < reconcile.index("const auto current_mode") < reconcile.index("player.setFlying(")
+assert re.search(r'if\s*\(!has\("fly"\)\s*&&\s*current_mode != endstone::GameMode::Creative\s*&&\s*current_mode != endstone::GameMode::Spectator\)', reconcile)
+assert 'else if (has("fly") && mode != current_mode)' in reconcile, \
+    "Flight eligibility must use the actual resulting mode, including a skipped gamemode setter"
+assert 'utils::mayKeepGameMode(static_cast<int>(mode)' in reconcile
+assert '"setGameMode", revoke_mode,' in reconcile
+assert '"setNameTag", !has("nickname") && !has("nickname.other"),' in reconcile
+assert '"revokeGod", !has("god") && !has("god.other"),' in reconcile
+assert '"clearAfkCache", !has("afk"),' in reconcile
+assert 'if (has(node)) {' in reconcile and 'node, found != intervals->end(),' in reconcile
+for forbidden in ("setHealth(", "setMaxHealth(", "runTask", "sendPacket", "dispatchCommand", "catch ("):
+    assert forbidden not in reconcile, f"Unexpected fix/timing/failure behavior introduced: {forbidden}"
+
 # Console-only means the actual console identity, not Owner/OP or !asPlayer().
 assert "hierarchy::isConsole(plugin, sender)" in command
 assert re.search(r"\.apply\(\s*hierarchy::isConsole\(plugin, sender\),\s*args\)", command), \
@@ -79,8 +150,10 @@ for forbidden in ("reloadCustomPerms", "reconcilePlayerState", "dispatchCommand"
 metadata = read("src/commands/command_metadata.cpp")
 assert 'cmd(b, "hudtest")' in metadata and "REGISTER_COMMAND(hudtest," in command
 for source in (command, metadata.split('cmd(b, "hudtest")', 1)[1].split("cmd(b,", 1)[0]):
-    assert "baseline|skip|status" in source, "Console controls must expose the intended three actions"
+    assert "utils::hudTestUsages()" in source, "Both registrations must use the tested public command syntax"
+assert "hudSelectionList(plugin.hud_test.selectedMask())" in command
+assert "hudSelectionList(plugin.hud_test.selectedMask(), false)" in command
 assert "[HUDTest]" in plugin and "getHealth()" in plugin, "Diagnostics must include snapshots of server health"
 workflow = read(".github/workflows/build.yml")
 assert "branches: [chromevale-permissions-fix, chromevale-health-hud-test]" in workflow
-print("HUD join-only bypass, both reconciliation sites, failure/completion order and console wiring checked.")
+print("HUD join-only component gates, both flight/synchronization sites, original setter ordering, failure/completion and console wiring checked.")

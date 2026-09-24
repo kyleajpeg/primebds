@@ -2,6 +2,7 @@
 #include "primebds/commands/command_metadata.h"
 #include "primebds/utils/admin_commands.h"
 #include "primebds/utils/rank_tools.h"
+#include "primebds/utils/hud_diagnostic.h"
 
 #include <map>
 #include <sstream>
@@ -601,7 +602,7 @@ void registerEndstoneCommands(endstone::detail::PluginDescriptionBuilder &b) {
         .usages(utils::rankInfoUsages()).permissions("primebds.command.rank.info");
 
     cmd(b, "hudtest").description("Control the temporary join-reconciliation experiment from the console")
-        .usages("/hudtest (baseline|skip|status)<action: hudtest_action>")
+        .usages(utils::hudTestUsages())
         .permissions("primebds.command.hudtest");
 
     cmd(b, "rank").description("Manage server ranks!")

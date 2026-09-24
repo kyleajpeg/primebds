@@ -12,18 +12,21 @@ namespace primebds::commands {
             return true;
         }
         if (result == utils::HudTestResult::Usage) {
-            sender.sendMessage("Usage: hudtest <baseline|skip|status>");
+            sender.sendMessage("Usage: hudtest <baseline|skip|status> OR hudtest <enable|disable> <component>");
+            sender.sendMessage("Components: " + utils::hudSelectionList(utils::HudAllComponents) + "; groups: speeds,flight");
             return false;
         }
         const std::string mode = utils::hudModeName(plugin.hud_test.mode());
         sender.sendMessage("[HUDTest] mode=" + mode +
+            "; enabled=" + utils::hudSelectionList(plugin.hud_test.selectedMask()) +
+            "; disabled=" + utils::hudSelectionList(plugin.hud_test.selectedMask(), false) +
             "; scope=all subsequent join synchronizations; online reconciliation remains normal; restart restores baseline.");
-        if (result == utils::HudTestResult::Changed && plugin.hud_test.mode() == utils::HudTestMode::Skip)
-            sender.sendMessage("[HUDTest] Join gameplay/preference revocations will be skipped. Switching back does not reconcile players already online.");
+        if (result == utils::HudTestResult::Changed && plugin.hud_test.mode() != utils::HudTestMode::Baseline)
+            sender.sendMessage("[HUDTest] Disabled join operations may leave revoked gameplay/preferences active. Switching back does not reconcile players already online.");
         return true;
     }
 
     REGISTER_COMMAND(hudtest, "Control the temporary join-reconciliation experiment from the console", cmd_hudtest,
-        info.usages = {"/hudtest (baseline|skip|status)<action: hudtest_action>"};
+        info.usages = utils::hudTestUsages();
         info.permissions = {"primebds.command.hudtest"};);
 } // namespace primebds::commands
