@@ -144,5 +144,5 @@ for directory in ("src", "include"):
             f"Diagnostic implementation leaked into production: {path}"
 for forbidden in ("getHealth()", "getMaxHealth()", "getWalkSpeed()", "getFlySpeed()", "PacketReceiveEvent", "setPayload("):
     assert forbidden not in sync + repair + join_callback, f"Repair must not introduce snapshots/packet observation: {forbidden}"
-assert "3.4.3-chromevale.15" in plugin
+assert "3.4.3-chromevale.16" in plugin
 print("Disconnect, cancelled login, disable and replacement invalidation checked; production has no diagnostic commands, switches or logging.")

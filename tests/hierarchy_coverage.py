@@ -121,10 +121,10 @@ assert permission_writes.count('writeTextFile(')==4 and permission_writes.count(
 assert '.dump(' not in permission_writes, 'No permissions write may bypass ordered serialization'
 print('Native-only peer teleport policy, unchanged effect authorization and centralized permissions serialization checked.')
 
-# .15: exactly three native world commands are delegated; no remapping or OP grants.
+# .16: four permission-based native world commands; unrestricted summon and no OP grants.
 native = hierarchy_source.split('bool authorizeNativeCommand(',1)[1].split('void socialSpy(',1)[0]
 owner_world = set(re.findall(r'"([^"\n]+)"', native.split('owner_world =',1)[1].split(';',1)[0]))
-assert owner_world == {'stop', 'save', 'difficulty', 'gamerule', 'time', 'toggledownfall', 'daylock',
+assert owner_world == {'stop', 'save', 'difficulty', 'gamerule', 'toggledownfall', 'daylock',
     'fill', 'clone', 'setblock', 'structure', 'place', 'setworldspawn', 'mobevent', 'tickingarea',
     'setmaxplayers', 'scoreboard'}, owner_world
 console_only = native.split('console_only =',1)[1].split(';',1)[0]
@@ -132,12 +132,17 @@ assert all('"' + command + '"' in console_only for command in ('execute','functi
 assert native.index('if (isAdministrator(plugin, sender)) return true;') < native.index('authorizeDelegatedWorldCommand(')
 world_gate = native.split('const auto world_decision =',1)[1].split('static const std::set<std::string> owner_world',1)[0]
 assert 'sender.hasPermission(std::string(permission))' in world_gate
-for decision in ('MissingPermission', 'FacingRequiresCoordinates'):
-    branch = world_gate.split('if (world_decision == DelegatedWorldDecision::' + decision + ')',1)[1].split('}',1)[0]
-    assert 'return false;' in branch
+missing_permission = world_gate.split('if (world_decision == DelegatedWorldDecision::MissingPermission)',1)[1].split('}',1)[0]
+assert 'return false;' in missing_permission
 assert 'if (world_decision == DelegatedWorldDecision::Allowed) return true;' in world_gate
+assert 'authorizeDelegatedWorldCommand(name,' in world_gate and 'args' not in world_gate
+world_policy = (root/'include/primebds/utils/native_world_commands.h').read_text(encoding='utf-8')
+assert 'const std::vector<std::string> &args' not in world_policy
+for removed in ('summonUsesCoordinateFacing', 'FacingRequiresCoordinates', 'Use three coordinates after summon facing'):
+    assert removed not in world_policy + hierarchy_source, 'Do not retain the summon facing restriction'
+
 assert all(word not in world_gate for word in ('dispatchCommand', 'performCommand', 'setOp', 'Admin"', 'weight'))
-for command in ('summon','locate','weather'):
+for command in ('summon','locate','weather','time'):
     assert '"' + command + '"' not in intercept, 'Delegated world commands must retain native dispatch'
     assert command not in commands, 'Do not register a replacement native command'
 assert 'hierarchy::authorizeNativeCommand(plugin, player, cmd, arguments)' in intercept
