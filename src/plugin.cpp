@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <ctime>
+#include <exception>
 #include <filesystem>
 #include <set>
 
@@ -97,6 +98,8 @@ namespace primebds {
     void PrimeBDS::onDisable() {
         getLogger().info("PrimeBDS v{} disabled.", getDescription().getVersion());
 
+        permission_sessions.clear();
+        for (const auto &uuid : permission_repairs_.uuids()) cancelPermissionRepair(uuid);
         if (god_maintenance_task_ >= 0) {
             getServer().getScheduler().cancelTask(god_maintenance_task_);
             god_maintenance_task_ = -1;
@@ -248,7 +251,8 @@ namespace primebds {
         return final_permissions;
     }
 
-    bool PrimeBDS::reloadCustomPerms(endstone::Player &player) {
+    bool PrimeBDS::reloadCustomPerms(endstone::Player &player, utils::PermissionSyncOrigin origin,
+                                     bool force_reconcile) {
         auto &pm = permissions::PermissionManager::instance();
         auto user = db->getOnlineUser(player.getXuid());
         if (!user) {
@@ -299,21 +303,94 @@ namespace primebds {
 
         player.updateCommands();
         player.recalculatePermissions();
-        if (hierarchy::lower(internal_rank) != hierarchy::lower(user->internal_rank)) reconcilePlayerState(player);
+        bool reconciled = false;
+        if (hierarchy::lower(internal_rank) != hierarchy::lower(user->internal_rank)) {
+            reconcilePlayerState(player);
+            reconciled = true;
+        }
         pm.clearPrefixSuffixCache();
         pm.invalidatePermCache(player.getXuid());
         const int pending = db->pendingStateReset(player.getXuid());
         if (pending) {
             reconcilePlayerState(player);
+            reconciled = true;
             db->clearPendingStateReset(player.getXuid());
+        }
+        if (force_reconcile && !reconciled) {
+            reconcilePlayerState(player);
+            reconciled = true;
         }
         // Deliver only after permissions and gameplay state successfully synchronize.
         // The stored baseline survives offline changes/restarts; restoration is silent.
-        if (const auto rank = db->pendingRankNotice(player.getXuid()))
-            player.sendMessage("§aYour rank is now §e" + *rank + "§r");
+        if (!force_reconcile) {
+            if (const auto rank = db->pendingRankNotice(player.getXuid()))
+                player.sendMessage("§aYour rank is now §e" + *rank + "§r");
+        }
         db->clearPendingRankNotice(player.getXuid());
         permissions_pending.erase(player.getXuid());
+        if (utils::shouldSchedulePermissionRepair(origin, force_reconcile, reconciled))
+            schedulePermissionRepair(player);
         return true;
+    }
+
+    void PrimeBDS::cancelPermissionRepair(const std::string &uuid) {
+        const auto task = permission_repairs_.take(uuid);
+        if (task) getServer().getScheduler().cancelTask(task->task_id);
+    }
+
+    void PrimeBDS::schedulePermissionRepair(endstone::Player &player) {
+        const auto uuid = player.getUniqueId();
+        const auto key = uuid.str();
+        const auto xuid = player.getXuid();
+        const auto session = permission_sessions.session(key);
+        const auto generation = permission_sessions.generation();
+        if (!session || !player.isValid()) return;
+        if (const auto *existing = permission_repairs_.find(key)) {
+            if (existing->session == session && existing->generation == generation) return;
+            cancelPermissionRepair(key);
+        }
+        const auto request = permission_repairs_.nextRequestId();
+        try {
+            auto task = getServer().getScheduler().runTaskLater(*this,
+                [this, uuid, key, xuid, session, generation, request]() {
+                    // Check session identity before resolving the UUID to a player.
+                    if (permission_sessions.generation() != generation ||
+                        !permission_sessions.active(key, session)) {
+                        permission_repairs_.take(key, session, generation, request);
+                        return;
+                    }
+                    const auto *tracked = permission_repairs_.find(key);
+                    if (!tracked || tracked->session != session || tracked->generation != generation ||
+                        tracked->request != request) return;
+                    auto *p = getServer().getPlayer(uuid);
+                    if (!p || !p->isValid() || p->getUniqueId().str() != key || p->getXuid() != xuid) {
+                        permission_repairs_.take(key, session, generation, request);
+                        return;
+                    }
+                    try {
+                        // Reload the current saved rank; never restore a scheduling-time snapshot.
+                        if (!reloadCustomPerms(*p, utils::PermissionSyncOrigin::Live, true))
+                            getLogger().error("Delayed permission reconciliation failed for {}.", xuid);
+                    } catch (const std::exception &error) {
+                        getLogger().error("Delayed permission reconciliation failed for {}: {}", xuid, error.what());
+                    } catch (...) {
+                        getLogger().error("Delayed permission reconciliation failed for {}: unknown exception.", xuid);
+                    }
+                    permission_repairs_.take(key, session, generation, request);
+                }, utils::PermissionRepairDelayTicks);
+            if (!task) {
+                getLogger().error("Could not schedule delayed permission reconciliation for {}.", xuid);
+                return;
+            }
+            if (!permission_repairs_.track(key, {session, generation, request, task->getTaskId()})) {
+                getServer().getScheduler().cancelTask(task->getTaskId());
+                getLogger().error("Could not track delayed permission reconciliation for {}.", xuid);
+            }
+        } catch (const std::exception &error) {
+            getLogger().error("Could not schedule delayed permission reconciliation for {}: {}", xuid, error.what());
+        } catch (...) {
+            getLogger().error("Could not schedule delayed permission reconciliation for {}: unknown exception.", xuid);
+        }
     }
 
     void PrimeBDS::checkForInactiveSessions() {
@@ -368,7 +445,14 @@ namespace primebds {
     }
 
     void EventListener::onPlayerLogin(endstone::PlayerLoginEvent &event) {
+        const auto uuid = event.getPlayer().getUniqueId().str();
+        plugin_.cancelPermissionRepair(uuid);
+        plugin_.permission_sessions.start(uuid);
         handlers::connections::handleLoginEvent(plugin_, event);
+        if (event.isCancelled()) {
+            plugin_.cancelPermissionRepair(uuid);
+            plugin_.permission_sessions.end(uuid);
+        }
     }
 
     void EventListener::onPlayerJoin(endstone::PlayerJoinEvent &event) {
@@ -376,6 +460,9 @@ namespace primebds {
     }
 
     void EventListener::onPlayerQuit(endstone::PlayerQuitEvent &event) {
+        const auto uuid = event.getPlayer().getUniqueId().str();
+        plugin_.permission_sessions.end(uuid);
+        plugin_.cancelPermissionRepair(uuid);
         handlers::connections::handleLeaveEvent(plugin_, event);
     }
 
@@ -415,7 +502,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.12", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.13", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

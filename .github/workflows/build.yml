@@ -62,7 +62,7 @@ jobs:
           fi
           cd build/linux/output
           sha256sum endstone_primebds.so > SHA256SUMS
-          printf 'PrimeBDS ChromeVale permission fix\nSource commit: %s\nBuild run: %s/%s/actions/runs/%s\nMaximum GLIBC: %s\n' "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$max_glibc" > BUILD-INFO.txt
+          printf 'PrimeBDS ChromeVale permission fix\nSource commit: %s\nBranch: %s\nBuild run: %s/%s/actions/runs/%s\nMaximum GLIBC: %s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$max_glibc" > BUILD-INFO.txt
 
       - name: Upload verified build
         uses: actions/upload-artifact@v4

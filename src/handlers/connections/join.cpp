@@ -8,6 +8,7 @@
 #include "primebds/utils/permissions/permission_manager.h"
 
 #include <ctime>
+#include <exception>
 #include <string>
 
 namespace primebds::handlers::connections {
@@ -77,12 +78,32 @@ namespace primebds::handlers::connections {
             auto op = granted.find("primebds.minecraft.op");
             if (op == granted.end() || !op->second) player.setOp(false);
         }
-        auto uuid = player.getUniqueId();
-        plugin.getServer().getScheduler().runTask(plugin, [&plugin, uuid]() {
-            auto *p = plugin.getServer().getPlayer(uuid);
-            if (p)
-                plugin.reloadCustomPerms(*p);
-        });
+        const auto uuid = player.getUniqueId();
+        const auto session = plugin.permission_sessions.session(uuid.str());
+        const auto generation = plugin.permission_sessions.generation();
+        try {
+            auto task = plugin.getServer().getScheduler().runTask(plugin,
+                [&plugin, uuid, xuid, session, generation]() {
+                    // A rapid reconnect can give the same UUID to a different login.
+                    if (plugin.permission_sessions.generation() != generation ||
+                        !plugin.permission_sessions.active(uuid.str(), session)) return;
+                    auto *p = plugin.getServer().getPlayer(uuid);
+                    if (!p || !p->isValid() || p->getUniqueId().str() != uuid.str() || p->getXuid() != xuid) return;
+                    try {
+                        if (!plugin.reloadCustomPerms(*p, utils::PermissionSyncOrigin::Join))
+                            plugin.getLogger().error("Join permission synchronization failed for {}.", xuid);
+                    } catch (const std::exception &error) {
+                        plugin.getLogger().error("Join permission synchronization failed for {}: {}", xuid, error.what());
+                    } catch (...) {
+                        plugin.getLogger().error("Join permission synchronization failed for {}: unknown exception.", xuid);
+                    }
+                });
+            if (!task) plugin.getLogger().error("Could not schedule join permission synchronization for {}.", xuid);
+        } catch (const std::exception &error) {
+            plugin.getLogger().error("Could not schedule join permission synchronization for {}: {}", xuid, error.what());
+        } catch (...) {
+            plugin.getLogger().error("Could not schedule join permission synchronization for {}: unknown exception.", xuid);
+        }
 
         // Ban check - suppress join message if banned
         auto mod_log = plugin.db->getModLog(xuid);

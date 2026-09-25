@@ -13,6 +13,7 @@
 #include "primebds/utils/intervals.h"
 #include "primebds/utils/admin_commands.h"
 #include "primebds/utils/rank_tools.h"
+#include "primebds/utils/permission_sync.h"
 
 // Handler includes (split organization)
 #include "primebds/handlers/actions.h"
@@ -50,7 +51,12 @@ namespace primebds {
                        const std::vector<std::string> &args) override;
 
         // Re-apply custom permissions for a player
-        bool reloadCustomPerms(endstone::Player &player);
+        bool reloadCustomPerms(endstone::Player &player,
+                               utils::PermissionSyncOrigin origin = utils::PermissionSyncOrigin::Live,
+                               bool force_reconcile = false);
+        void schedulePermissionRepair(endstone::Player &player);
+        void cancelPermissionRepair(const std::string &uuid);
+        utils::PermissionSyncSessions permission_sessions;
         std::map<std::string, bool> savedPermissions(const std::string &xuid, const std::string &rank);
         void reconcilePlayerState(endstone::Player &player);
         void maintainGodMode(endstone::Player &player, bool refill_hunger = true);
@@ -101,6 +107,7 @@ namespace primebds {
         utils::IntervalManager afk_interval;
 
     private:
+        utils::PermissionRepairTasks permission_repairs_;
         int god_maintenance_task_ = -1;
         std::set<std::string> god_feed_failures_;
         std::unique_ptr<EventListener> listener_;
