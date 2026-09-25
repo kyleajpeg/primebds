@@ -2,6 +2,8 @@
 #include "primebds/utils/hud_timeline.h"
 
 #include <iostream>
+#include <limits>
+#include <type_traits>
 #include <stdexcept>
 #include <string>
 
@@ -57,6 +59,12 @@ static void checkSchedulingAndForce() {
 }
 
 static void checkTaskOwnershipAndLifetime() {
+    static_assert(std::is_same_v<decltype(HudRepairTask::task_id), std::uint32_t>);
+    HudRepairTasks wide_ids;
+    const auto largest_id = std::numeric_limits<std::uint32_t>::max();
+    check(wide_ids.track("wide", {1, 1, 1, 0, largest_id}) &&
+              wide_ids.take("wide")->task_id == largest_id,
+          "Scheduler task IDs retain their full unsigned width for cancellation");
     HudTimeline sessions;
     HudRepairTasks tasks;
     const auto first = sessions.start("a");

@@ -24,7 +24,7 @@ struct HudRepairTask {
     std::uint64_t generation;
     std::uint64_t parent_sync;
     std::uint64_t queued_ms;
-    int task_id = -1;
+    std::uint32_t task_id = 0;
 };
 
 // Server-thread bookkeeping only. A stale callback must not remove the repair
