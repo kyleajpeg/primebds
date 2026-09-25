@@ -2,6 +2,7 @@
 /// Configuration management implementation.
 
 #include "primebds/utils/config/config_manager.h"
+#include "primebds/utils/permissions_serialization.h"
 #include "primebds/utils/config/config_defaults.h"
 #include "primebds/commands/command_registry.h"
 
@@ -223,7 +224,7 @@ namespace primebds::config {
         auto content = readTextFile(path);
         if (content.empty()) {
             auto defaults = getDefaultPermissions();
-            writeTextFile(path, defaults.dump(4));
+            writeTextFile(path, utils::serializePermissions(defaults));
             return defaults;
         }
 
@@ -241,18 +242,18 @@ namespace primebds::config {
                 updated = true;
             }
             if (updated)
-                writeTextFile(path, perms.dump(4));
+                writeTextFile(path, utils::serializePermissions(perms));
             return perms;
         } catch (...) {
             auto defaults = getDefaultPermissions();
-            writeTextFile(path, defaults.dump(4));
+            writeTextFile(path, utils::serializePermissions(defaults));
             return defaults;
         }
     }
 
     void ConfigManager::savePermissions(const nlohmann::json &perms) {
         auto path = (fs::path(getDataFolderPath()) / "permissions.json").string();
-        writeTextFile(path, perms.dump(4));
+        writeTextFile(path, utils::serializePermissions(perms));
     }
 
     std::vector<std::string> ConfigManager::loadRules() {

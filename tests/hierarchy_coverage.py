@@ -104,3 +104,19 @@ assert 'Your rank is now' in plugin
 assert 'assignRank(player.getXuid(), "Default")' in (root/'src/utils/permissions/permission_manager.cpp').read_text(encoding='utf-8')
 assert '(lower ranks only)' not in mute
 print('Rank lookup registration, list authorization, and deferred notification wiring checked.')
+
+# .14: peer targeting is limited to native teleport; all permission writes use the serializer.
+hierarchy_source = (root/'src/utils/hierarchy.cpp').read_text(encoding='utf-8')
+teleport_branch = hierarchy_source.split('else if (name == "teleport" || name == "tp")',1)[1].split('} else if',1)[0]
+assert 'for (const auto &target : *targets)' in teleport_branch
+assert 'canTeleportTarget(actor_rank, playerRank(plugin, target))' in teleport_branch
+assert hierarchy_source.count('canTeleportTarget(')==1, 'Peer policy must not leak to other actions'
+assert 'return requireTarget(plugin, sender, target, allow_self);' in hierarchy_source
+assert '"effect"' in hierarchy_source.split('static const std::set<std::string> first_target',1)[1].split(';',1)[0]
+assert 'bool authorizeNativeCommand(' in hierarchy_source
+assert '{"teleport", "minecraft.command.teleport"}, {"tp", "minecraft.command.teleport"}' in (root/'include/primebds/handlers/preprocesses/command_authorization.h').read_text(encoding='utf-8')
+config_source=(root/'src/utils/config/config_manager.cpp').read_text(encoding='utf-8')
+permission_writes=config_source.split('nlohmann::json ConfigManager::loadPermissions()',1)[1].split('std::vector<std::string> ConfigManager::loadRules()',1)[0]
+assert permission_writes.count('writeTextFile(')==4 and permission_writes.count('utils::serializePermissions(')==4
+assert '.dump(' not in permission_writes, 'No permissions write may bypass ordered serialization'
+print('Native-only peer teleport policy, unchanged effect authorization and centralized permissions serialization checked.')

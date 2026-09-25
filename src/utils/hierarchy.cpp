@@ -146,8 +146,13 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
     else if (name == "teleport" || name == "tp") {
         const auto targets = teleportTargets(args);
         if (!targets) { sender.sendMessage("Use literal names or coordinates; complex teleport forms require the panel."); return false; }
-        for (const auto &target : *targets)
-            if (!requireTarget(plugin, sender, target)) return false;
+        const auto actor_rank = playerRank(plugin, sender.getName());
+        for (const auto &target : *targets) {
+            if (!canTeleportTarget(actor_rank, playerRank(plugin, target))) {
+                sender.sendMessage("Teleport denied: targets must have an equal or lower rank (unknown ranks are protected).");
+                return false;
+            }
+        }
         return true;
     } else if (!first_target.contains(name)) {
         sender.sendMessage("You do not have permission to use this command");

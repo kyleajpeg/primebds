@@ -11,12 +11,39 @@ int main() {
     const Rank owner{"Owner",1000}, op{"Operator",100}, co{"Co-Owner",75}, admin{"Admin",50}, mod{"Moderator",25}, member{"Default",0};
     const std::vector<Rank> ranks{owner,op,co,admin,mod,member};
     for (std::size_t i=0;i<ranks.size();++i) for (std::size_t j=0;j<ranks.size();++j) {
+        check(canTeleportTarget(ranks[i],ranks[j])==(i<2 || i<=j),"native teleport permits peers/lower only");
         check(canTarget(ranks[i],ranks[j],false,true)==(i<2 || i<j),"target rank order/peer protection");
         check(canTarget(ranks[i],ranks[i],true,true),"self utility use");
         check(canTarget(ranks[i],ranks[i],true,false)==(i<2),"self moderation/assignment protection");
         for (std::size_t k=0;k<ranks.size();++k)
             check(canObserve(ranks[i],{ranks[j],ranks[k]})==(i<2 || (i<j && i<k)),"both spy participants must be lower");
     }
+    check(canTeleportTarget(admin,{"OtherAdmin",50}),"different equal-weight ranks may teleport");
+    check(!canTeleportTarget(admin,{"Unknown",std::nullopt}),"unknown teleport target protected");
+    check(!canTeleportTarget({"Broken",std::nullopt},member),"unknown teleport actor denied");
+    check(!canTeleportTarget({"Owner",std::nullopt},member),"invalid privileged actor has no bypass");
+    check(!canTeleportTarget({"Custom",1000},owner) && !canTeleportTarget({"Custom",2000},op),"trusted ranks retain protection despite custom weights");
+    check(canTeleportTarget(owner,{"Unknown",std::nullopt}) && canTeleportTarget(op,owner),"trusted teleport recovery bypass retained");
+    check(!canTarget(admin,admin,false,true),"effect/other utilities still reject peers");
+    check(!canAssign(admin,member,admin,false,false),"teleport peer exception cannot leak into assignments");
+    check(!canObserve(admin,{mod,admin}),"teleport peer exception cannot leak into spy privacy");
+    for (const auto *alias : {"/tp","/teleport","/minecraft:tp","/minecraft:teleport"}) {
+        auto name=canonicalName(alias);
+        check(name=="tp" || name=="teleport","teleport alias canonicalization");
+    }
+    const auto both=teleportTargets({"Member","Peer"});
+    check(both && both->size()==2,"native teleport exposes moved player and destination");
+    const std::map<std::string,Rank> identities{{"Member",member},{"Peer",admin},{"Higher",co}};
+    auto permits = [&](const std::vector<std::string> &args) {
+        auto targets=teleportTargets(args);
+        if (!targets) return false;
+        return std::all_of(targets->begin(),targets->end(),[&](const auto &target) {
+            return canTeleportTarget(admin,identities.at(target));
+        });
+    };
+    check(permits({"Member","Peer"}) && permits({"Peer","Member"}),"either endpoint may be peer/lower");
+    check(!permits({"Higher","Peer"}) && !permits({"Peer","Higher"}),"either higher endpoint blocks teleport");
+    check(!permits({"@a","Peer"}) && !permits({"@s","1","2","3"}),"existing native teleport selector restrictions retained");
     check(!canObserve(mod,{owner,member}),"Owner -> Default privacy");
     check(!canObserve(mod,{member,owner}),"Default -> Owner privacy");
     check(!canObserve(mod,{mod,member}),"peer moderation privacy");

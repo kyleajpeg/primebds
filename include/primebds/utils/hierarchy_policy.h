@@ -38,6 +38,12 @@ inline bool canTarget(const Rank &actor, const Rank &target, bool same_player, b
     if (!actor.weight || !target.weight) return false;
     return same_player ? allow_self : outranks(actor, target);
 }
+// Native /tp and /teleport alone permit peers. Keep the shared strict policy intact.
+inline bool canTeleportTarget(const Rank &actor, const Rank &target) {
+    if (privileged(actor)) return true;
+    if (!actor.weight || !target.weight || privileged(target)) return false;
+    return *actor.weight >= *target.weight;
+}
 inline bool canObserve(const Rank &viewer, const std::vector<Rank> &participants) {
     if (participants.empty()) return false;
     for (const auto &p : participants) if (!outranks(viewer, p)) return false;
