@@ -104,8 +104,8 @@ inline std::string hudPayloadHex(std::string_view payload) {
     return result;
 }
 
-// Accessed on the server thread. These IDs only correlate diagnostic records;
-// they do not control permissions, reconciliation, or player gameplay state.
+// Accessed on the server thread. IDs correlate records and guard scheduled
+// work against stale login sessions; packet observations never gate gameplay.
 class HudTimeline {
 public:
     std::uint64_t elapsedMs() const {

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <ctime>
 #include <filesystem>
+#include <exception>
 #include <set>
 
 namespace primebds {
@@ -50,7 +51,7 @@ namespace primebds {
     void PrimeBDS::onEnable() {
         getLogger().info("PrimeBDS v{} enabled.", getDescription().getVersion());
         hud_test = utils::HudTestState{};
-        getLogger().info("[HUDTest] mode=baseline scope=all-joins; console: hudtest <baseline|skip|status> or hudtest <enable|disable> <component>; selection is not persisted.");
+        getLogger().info("[HUDTest] mode=baseline scope=all-joins; console: hudtest <baseline|skip|status> or hudtest <enable|disable> <component>; selection is not persisted; successful join reconciliation queues a full silent repair after 20 ticks.");
 
         // Register event listener
         listener_ = std::make_unique<EventListener>(*this);
@@ -102,6 +103,7 @@ namespace primebds {
 
         for (const auto task : hud_marker_tasks) getServer().getScheduler().cancelTask(task);
         hud_marker_tasks.clear();
+        for (const auto &uuid : hud_repairs_.uuids()) cancelHudRepair(uuid, "plugin-disable");
         hud_timeline.clear();
 
         if (god_maintenance_task_ >= 0) {
@@ -314,8 +316,12 @@ namespace primebds {
         return final_permissions;
     }
 
-    bool PrimeBDS::reloadCustomPerms(endstone::Player &player, utils::SyncOrigin origin) {
-        const auto context = hud_test.beginSync(origin);
+    bool PrimeBDS::reloadCustomPerms(endstone::Player &player, utils::SyncOrigin origin, bool force_reconcile) {
+        const auto context = hud_test.beginSync(utils::hudEffectiveSyncOrigin(origin, force_reconcile));
+        const auto *repair = force_reconcile ? hud_repairs_.find(player.getUniqueId().str()) : nullptr;
+        const auto parent_sync = repair ? repair->parent_sync : 0;
+        getLogger().info("{} sync={} parent_sync={} force_reconcile={} requested_origin={}", hudStamp(&player),
+            context.id, parent_sync, force_reconcile, utils::hudOriginName(origin));
         getLogger().info("{} sync={} phase=start player={} origin={} mode={} pending_before={}", hudStamp(&player), context.id, player.getName(), utils::hudOriginName(context.origin), utils::hudModeName(context.mode),
             db->pendingStateReset(player.getXuid()));
         getLogger().info("{} sync={} selection_mask={} enabled={} disabled={} effective={}", hudStamp(&player), context.id,
@@ -399,15 +405,103 @@ namespace primebds {
             diagnosticReconcile("pending");
             db->clearPendingStateReset(player.getXuid());
         }
+        if (force_reconcile && executed == 0) diagnosticReconcile("forced-repair");
         // Deliver only after permissions and gameplay state successfully synchronize.
         // The stored baseline survives offline changes/restarts; restoration is silent.
-        if (const auto rank = db->pendingRankNotice(player.getXuid()))
-            player.sendMessage("§aYour rank is now §e" + *rank + "§r");
+        if (!force_reconcile) {
+            if (const auto rank = db->pendingRankNotice(player.getXuid()))
+                player.sendMessage("§aYour rank is now §e" + *rank + "§r");
+        }
         db->clearPendingRankNotice(player.getXuid());
         permissions_pending.erase(player.getXuid());
         getLogger().info("{} sync={} phase=complete player={} final_rank={} origin={} mode={} executed={} skipped={} pending_after={} notices_consumed=true commands_unblocked=true", hudStamp(&player), context.id, player.getName(), internal_rank, utils::hudOriginName(context.origin), utils::hudModeName(context.mode),
             executed, skipped, db->pendingStateReset(player.getXuid()));
+        if (utils::shouldScheduleHudRepair(origin, force_reconcile, executed))
+            scheduleHudRepair(player, context.id);
         return true;
+    }
+
+    void PrimeBDS::cancelHudRepair(const std::string &uuid, const char *reason) {
+        const auto task = hud_repairs_.take(uuid);
+        if (!task) return;
+        getServer().getScheduler().cancelTask(task->task_id);
+        getLogger().info("[HUDTest] t_ms={} session={} uuid={} parent_sync={} event=repair.cancelled reason={} elapsed_ms={}",
+            hud_timeline.elapsedMs(), task->session, uuid, task->parent_sync, reason,
+            hud_timeline.elapsedMs() - task->queued_ms);
+    }
+
+    void PrimeBDS::scheduleHudRepair(endstone::Player &player, std::uint64_t parent_sync) {
+        const auto uuid = player.getUniqueId();
+        const auto key = uuid.str();
+        const auto xuid = player.getXuid();
+        const auto session = hud_timeline.session(key);
+        const auto generation = hud_timeline.generation();
+        const auto queued_ms = hud_timeline.elapsedMs();
+        if (!session || !player.isValid()) {
+            getLogger().warning("{} parent_sync={} event=repair.not-scheduled reason=no-active-player-session", hudStamp(&player), parent_sync);
+            return;
+        }
+        if (const auto *existing = hud_repairs_.find(key)) {
+            if (existing->session == session && existing->generation == generation) {
+                getLogger().info("{} parent_sync={} event=repair.already-queued queued_parent_sync={}",
+                    hudStamp(&player), parent_sync, existing->parent_sync);
+                return;
+            }
+            cancelHudRepair(key, "session-replacement");
+        }
+        try {
+            auto task = getServer().getScheduler().runTaskLater(*this,
+                [this, uuid, key, xuid, session, generation, parent_sync, queued_ms]() {
+                    // Validate captured session/generation before looking up any player.
+                    if (hud_timeline.generation() != generation || !hud_timeline.active(key, session)) {
+                        hud_repairs_.take(key, session, generation, parent_sync);
+                        getLogger().info("[HUDTest] t_ms={} session={} uuid={} parent_sync={} event=repair.cancelled reason=stale-session elapsed_ms={}",
+                            hud_timeline.elapsedMs(), session, key, parent_sync, hud_timeline.elapsedMs() - queued_ms);
+                        return;
+                    }
+                    const auto *tracked = hud_repairs_.find(key);
+                    if (!tracked || tracked->session != session || tracked->generation != generation ||
+                        tracked->parent_sync != parent_sync) return;
+                    auto *p = getServer().getPlayer(uuid);
+                    if (!p || !p->isValid() || p->getUniqueId().str() != key || p->getXuid() != xuid) {
+                        hud_repairs_.take(key, session, generation, parent_sync);
+                        getLogger().info("[HUDTest] t_ms={} session={} uuid={} parent_sync={} event=repair.cancelled reason=player-unavailable elapsed_ms={}",
+                            hud_timeline.elapsedMs(), session, key, parent_sync, hud_timeline.elapsedMs() - queued_ms);
+                        return;
+                    }
+                    getLogger().info("{} parent_sync={} event=repair.begin force_reconcile=true effective=all elapsed_ms={}",
+                        hudStamp(p), parent_sync, hud_timeline.elapsedMs() - queued_ms);
+                    try {
+                        // Resolve saved rank and permissions at execution, never at scheduling.
+                        // Keep the tracked parent available for the forced sync's correlation log.
+                        const bool success = reloadCustomPerms(*p, utils::SyncOrigin::Live, true);
+                        getLogger().info("{} parent_sync={} event=repair.{} force_reconcile=true elapsed_ms={}",
+                            hudStamp(p), parent_sync, success ? "complete" : "failed", hud_timeline.elapsedMs() - queued_ms);
+                    } catch (const std::exception &error) {
+                        getLogger().error("{} parent_sync={} event=repair.failed reason=exception detail={} elapsed_ms={}",
+                            hudStamp(p), parent_sync, error.what(), hud_timeline.elapsedMs() - queued_ms);
+                    } catch (...) {
+                        getLogger().error("{} parent_sync={} event=repair.failed reason=unknown-exception elapsed_ms={}",
+                            hudStamp(p), parent_sync, hud_timeline.elapsedMs() - queued_ms);
+                    }
+                    hud_repairs_.take(key, session, generation, parent_sync);
+                }, utils::HudRepairDelayTicks);
+            if (!task) {
+                getLogger().error("{} parent_sync={} event=repair.not-scheduled reason=scheduler-rejected", hudStamp(&player), parent_sync);
+                return;
+            }
+            if (!hud_repairs_.track(key, {session, generation, parent_sync, queued_ms, task->getTaskId()})) {
+                getServer().getScheduler().cancelTask(task->getTaskId());
+                getLogger().error("{} parent_sync={} event=repair.not-scheduled reason=duplicate-task", hudStamp(&player), parent_sync);
+                return;
+            }
+            getLogger().info("{} parent_sync={} event=repair.scheduled delay_ticks={} task={} force_reconcile=true effective=all", hudStamp(&player),
+                parent_sync, utils::HudRepairDelayTicks, task->getTaskId());
+        } catch (const std::exception &error) {
+            getLogger().error("{} parent_sync={} event=repair.not-scheduled reason=exception detail={}", hudStamp(&player), parent_sync, error.what());
+        } catch (...) {
+            getLogger().error("{} parent_sync={} event=repair.not-scheduled reason=unknown-exception", hudStamp(&player), parent_sync);
+        }
     }
 
     void PrimeBDS::checkForInactiveSessions() {
@@ -463,12 +557,14 @@ namespace primebds {
 
     void EventListener::onPlayerLogin(endstone::PlayerLoginEvent &event) {
         auto &player = event.getPlayer();
+        plugin_.cancelHudRepair(player.getUniqueId().str(), "session-replacement");
         plugin_.hud_timeline.start(player.getUniqueId().str());
         plugin_.getLogger().info("{} event=login address={}:{}", plugin_.hudStamp(&player),
             player.getAddress().getHostname(), player.getAddress().getPort());
         handlers::connections::handleLoginEvent(plugin_, event);
         if (event.isCancelled()) {
             plugin_.getLogger().info("{} event=login.cancelled", plugin_.hudStamp(&player));
+            plugin_.cancelHudRepair(player.getUniqueId().str(), "login-cancelled");
             plugin_.hud_timeline.end(player.getUniqueId().str());
         }
     }
@@ -480,6 +576,7 @@ namespace primebds {
 
     void EventListener::onPlayerQuit(endstone::PlayerQuitEvent &event) {
         plugin_.getLogger().info("{} event=disconnect", plugin_.hudStamp(&event.getPlayer()));
+        plugin_.cancelHudRepair(event.getPlayer().getUniqueId().str(), "disconnect");
         plugin_.hud_timeline.end(event.getPlayer().getUniqueId().str());
         handlers::connections::handleLeaveEvent(plugin_, event);
     }
@@ -520,7 +617,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.12-hudtest.3", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.12-hudtest.4", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

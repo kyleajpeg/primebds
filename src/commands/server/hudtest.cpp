@@ -20,7 +20,8 @@ namespace primebds::commands {
         sender.sendMessage("[HUDTest] mode=" + mode +
             "; enabled=" + utils::hudSelectionList(plugin.hud_test.selectedMask()) +
             "; disabled=" + utils::hudSelectionList(plugin.hud_test.selectedMask(), false) +
-            "; scope=all subsequent join synchronizations; online reconciliation remains normal; restart restores baseline.");
+            "; scope=all subsequent initial join synchronizations; online reconciliation remains normal; restart restores baseline.");
+        sender.sendMessage("[HUDTest] A successful initial join reconciliation queues one silent FULL repair after 20 server ticks (nominally 1 second), regardless of later switch changes. Partial selections are fully reconciled by that repair; skip schedules none. Loading packets are observational only.");
         if (result == utils::HudTestResult::Changed && plugin.hud_test.mode() != utils::HudTestMode::Baseline)
             sender.sendMessage("[HUDTest] Disabled join operations may leave revoked gameplay/preferences active. Switching back does not reconcile players already online.");
         return true;

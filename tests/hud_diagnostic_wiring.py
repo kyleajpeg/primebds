@@ -17,16 +17,17 @@ def without_comments(source):
 
 
 plugin = without_comments(read("src/plugin.cpp"))
-sync = plugin.split("bool PrimeBDS::reloadCustomPerms(", 1)[1].split("void PrimeBDS::checkForInactiveSessions(", 1)[0]
+sync = plugin.split("bool PrimeBDS::reloadCustomPerms(", 1)[1].split("void PrimeBDS::cancelHudRepair(", 1)[0]
 header = without_comments(read("include/primebds/plugin.h"))
 join = without_comments(read("src/handlers/connections/join.cpp"))
 command = without_comments(read("src/commands/server/hudtest.cpp"))
 reconcile = plugin.split("void PrimeBDS::reconcilePlayerState(", 1)[1].split("std::map<std::string, bool> PrimeBDS::savedPermissions(", 1)[0]
 
-assert re.search(r"reloadCustomPerms\(endstone::Player\s*&player,\s*utils::SyncOrigin\s+origin\s*=\s*utils::SyncOrigin::Live\)", header), \
-    "Existing callers must keep the Live default"
+assert re.search(r"reloadCustomPerms\(endstone::Player\s*&player,\s*utils::SyncOrigin\s+origin\s*=\s*utils::SyncOrigin::Live,\s*bool\s+force_reconcile\s*=\s*false\)", header), \
+    "Existing callers must retain Live origin and an opt-in force default"
 assert "utils::SyncOrigin origin" in sync
-assert "beginSync(origin)" in sync, "Capture diagnostic mode once per synchronization"
+assert "beginSync(utils::hudEffectiveSyncOrigin(origin, force_reconcile))" in sync, \
+    "Capture selection once with a full effective context only for forced synchronization"
 assert sync.count("beginSync(") == 1
 assert "context.selection" in sync and "selection_mask=" in sync and "effective=" in sync
 assert "hud_test = utils::HudTestState{}" in plugin, "Restart must restore the complete baseline selection"
@@ -38,8 +39,12 @@ for path in (root / "src").rglob("*.cpp"):
     for match in re.finditer(r"reloadCustomPerms\([^;]*?SyncOrigin::Join\)", source):
         join_origin_calls.append(path.relative_to(root).as_posix())
 assert join_origin_calls == ["src/handlers/connections/join.cpp"], join_origin_calls
-assert "[&plugin, uuid]" in join and "getPlayer(uuid)" in join
-assert re.search(r"if\s*\(p\)\s*plugin.reloadCustomPerms\(\*p,\s*utils::SyncOrigin::Join\)", join)
+assert "[&plugin, uuid, xuid, session, generation]" in join and "getPlayer(uuid)" in join
+assert "plugin.reloadCustomPerms(*p, utils::SyncOrigin::Join)" in join
+assert join.index("hud_timeline.generation() != generation") < join.index("getPlayer(uuid)")
+assert join.index("!plugin.hud_timeline.active(uuid.str(), session)") < join.index("getPlayer(uuid)")
+assert join.index("getPlayer(uuid)") < join.index("!p || !p->isValid()") < join.index("plugin.reloadCustomPerms(*p,")
+assert "p->getUniqueId().str() != uuid.str()" in join and "p->getXuid() != xuid" in join
 
 # Both .12 reconciliation sites must use the same gate, preserving their ordering.
 assert sync.count("runHudReconciliation(") == 1, "Use one shared gate for both reconciliation sites"
@@ -158,7 +163,7 @@ workflow = read(".github/workflows/build.yml")
 assert "branches: [chromevale-permissions-fix, chromevale-health-hud-test]" in workflow
 print("HUD join-only component gates, both flight/synchronization sites, original setter ordering, failure/completion and console wiring checked.")
 
-# Build 3 observes loading and repair timing without implementing a repair.
+# Loading packets remain observational; build 4 schedules repairs independently.
 timeline = without_comments(read("src/utils/hud_timeline.cpp"))
 assert 'EventPriority::Monitor, false' in plugin
 assert 'registerEvent(&EventListener::onHudPacket,' in plugin
@@ -187,5 +192,60 @@ for kind in ('Walk', 'Fly'):
     assert f'!request->query && (mode == Mode::{kind} || mode == Mode::Both)' in speed
     assert f'event=manual-speed.begin setter=set{kind}Speed' in speed
     assert f'event=manual-speed.end setter=set{kind}Speed' in speed
-assert '3.4.3-chromevale.12-hudtest.3' in plugin
+assert '3.4.3-chromevale.12-hudtest.4' in plugin
 print('Loading observer, session-bound log markers, lifecycle timestamps and manual speed instrumentation checked.')
+
+
+# Build 4's real adapter must use the tested force/queue and session task helpers.
+assert 'force_reconcile={}' in sync and 'parent_sync={}' in sync
+assert 'if (force_reconcile && executed == 0) diagnosticReconcile("forced-repair");' in sync
+force_site = sync.index('diagnosticReconcile("forced-repair")')
+assert clear_pending < force_site < notice < clear_notice < unblock
+assert re.search(r'if\s*\(!force_reconcile\)\s*\{\s*if\s*\(const auto rank = db->pendingRankNotice\(player.getXuid\(\)\)\)\s*player.sendMessage\(', sync), \
+    "Only an ordinary synchronization may send the deferred rank notification"
+assert sync.count('player.sendMessage(') == 1, "Forced synchronization must remain silent"
+assert sync.index('db->getOnlineUser(') < sync.index('savedPermissions(') < failure, \
+    "Each synchronization must read saved rank and permissions anew"
+assert sync.count('scheduleHudRepair(') == 1
+assert re.search(r'if\s*\(utils::shouldScheduleHudRepair\(origin, force_reconcile, executed\)\)\s*scheduleHudRepair\(player, context.id\);', sync)
+assert unblock < sync.index('phase=complete') < sync.index('scheduleHudRepair(') < sync.rindex('return true;'), \
+    "Schedule only after successful synchronization and acknowledgement, never on a failure path"
+
+repair = plugin.split('void PrimeBDS::scheduleHudRepair(', 1)[1].split('void PrimeBDS::checkForInactiveSessions(', 1)[0]
+cancel = plugin.split('void PrimeBDS::cancelHudRepair(', 1)[1].split('void PrimeBDS::scheduleHudRepair(', 1)[0]
+assert 'hud_repairs_.take(uuid)' in cancel and 'cancelTask(task->task_id)' in cancel
+assert repair.count('runTaskLater(') == 1 and '}, utils::HudRepairDelayTicks);' in repair
+assert 'HudRepairDelayTicks = 20' in read('include/primebds/utils/hud_repair.h')
+assert '[this, uuid, key, xuid, session, generation, parent_sync, queued_ms]' in repair
+assert 'existing->session == session && existing->generation == generation' in repair
+assert 'hud_repairs_.track(key, {session, generation, parent_sync, queued_ms, task->getTaskId()})' in repair
+assert 'cancelTask(task->getTaskId())' in repair, "A scheduler task rejected by registry ownership must be cancelled"
+repair_callback = repair.split('[this, uuid, key, xuid, session, generation, parent_sync, queued_ms]()', 1)[1].split('}, utils::HudRepairDelayTicks);', 1)[0]
+lookup = repair_callback.index('getPlayer(uuid)')
+assert repair_callback.index('hud_timeline.generation() != generation') < lookup
+assert repair_callback.index('!hud_timeline.active(key, session)') < lookup
+assert repair_callback.index('hud_repairs_.find(key)') < lookup
+assert lookup < repair_callback.index('!p || !p->isValid()') < repair_callback.index('reloadCustomPerms(*p,')
+assert 'p->getUniqueId().str() != key' in repair_callback and 'p->getXuid() != xuid' in repair_callback
+assert repair_callback.count('reloadCustomPerms(*p, utils::SyncOrigin::Live, true)') == 1
+assert repair_callback.rindex('hud_repairs_.take(key, session, generation, parent_sync)') > repair_callback.index('reloadCustomPerms(*p,'), \
+    "Completion removes only this task while keeping parent correlation available during forced sync"
+for forbidden in ('runTaskLaterAsync', 'runTaskTimer', 'sleep(', 'sendMessage(', 'setHealth(', 'setMaxHealth(', 'assignRank(', 'dispatchCommand('):
+    assert forbidden not in repair, f'Unexpected delayed repair side effect or execution mode: {forbidden}'
+for forbidden in ('scheduleHudRepair(', 'cancelHudRepair(', 'hud_repairs_', 'HudRepairDelayTicks'):
+    assert forbidden not in timeline, f'Loading observer must not trigger or control repair: {forbidden}'
+assert 'force_reconcile=true' in repair and 'elapsed_ms=' in repair and 'event=repair.scheduled' in repair
+assert 'reason=scheduler-rejected' in repair and 'reason=exception' in repair and 'reason=unknown-exception' in repair
+assert 'success ? "complete" : "failed"' in repair
+assert '20 server ticks' in command and 'FULL repair' in command and 'skip schedules none' in command
+
+login = plugin.split('void EventListener::onPlayerLogin(', 1)[1].split('void EventListener::onPlayerJoin(', 1)[0]
+quit = plugin.split('void EventListener::onPlayerQuit(', 1)[1].split('void EventListener::onPlayerKick(', 1)[0]
+disable = plugin.split('void PrimeBDS::onDisable()', 1)[1].split('bool PrimeBDS::onCommand(', 1)[0]
+assert login.index('cancelHudRepair(player.getUniqueId().str(), "session-replacement")') < login.index('hud_timeline.start(')
+assert 'if (event.isCancelled())' in login and 'cancelHudRepair(player.getUniqueId().str(), "login-cancelled")' in login
+assert login.index('if (event.isCancelled())') < login.index('hud_timeline.end(')
+assert quit.index('cancelHudRepair(event.getPlayer().getUniqueId().str(), "disconnect")') < quit.index('hud_timeline.end(')
+assert 'for (const auto &uuid : hud_repairs_.uuids()) cancelHudRepair(uuid, "plugin-disable")' in disable
+assert disable.index('cancelHudRepair(uuid, "plugin-disable")') < disable.index('hud_timeline.clear()')
+print('Silent forced repair, completion-only 20-tick scheduling, fresh rank reads and both session-guarded callbacks checked.')

@@ -15,6 +15,7 @@
 #include "primebds/utils/rank_tools.h"
 #include "primebds/utils/hud_diagnostic.h"
 #include "primebds/utils/hud_timeline.h"
+#include "primebds/utils/hud_repair.h"
 
 // Handler includes (split organization)
 #include "primebds/handlers/actions.h"
@@ -53,7 +54,10 @@ namespace primebds {
                        const std::vector<std::string> &args) override;
 
         // Re-apply custom permissions for a player
-        bool reloadCustomPerms(endstone::Player &player, utils::SyncOrigin origin = utils::SyncOrigin::Live);
+        bool reloadCustomPerms(endstone::Player &player, utils::SyncOrigin origin = utils::SyncOrigin::Live,
+                               bool force_reconcile = false);
+        void scheduleHudRepair(endstone::Player &player, std::uint64_t parent_sync);
+        void cancelHudRepair(const std::string &uuid, const char *reason);
         std::map<std::string, bool> savedPermissions(const std::string &xuid, const std::string &rank);
         void reconcilePlayerState(endstone::Player &player, const utils::HudSyncContext &context, const char *reason);
         void logHudState(endstone::Player &player, const utils::HudSyncContext &context, const char *phase, const char *reason);
@@ -110,6 +114,7 @@ namespace primebds {
         utils::IntervalManager afk_interval;
 
     private:
+        utils::HudRepairTasks hud_repairs_;
         int god_maintenance_task_ = -1;
         std::set<std::string> god_feed_failures_;
         std::unique_ptr<EventListener> listener_;

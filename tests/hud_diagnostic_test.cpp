@@ -1,4 +1,5 @@
 #include "primebds/utils/hud_diagnostic.h"
+#include "primebds/utils/hud_repair.h"
 #include "primebds/utils/database/user_db.h"
 
 #include <array>
@@ -273,6 +274,119 @@ static void checkPersistentCompletion(const std::filesystem::path &directory) {
     }
 }
 
+
+// Real SQLite work and the production gate/queue helpers verify acknowledgements,
+// silent forced sync and fresh rank reads. Static wiring separately guards the
+// Endstone adapter and scheduler; this does not claim to emulate a game client.
+static void checkForcedRepairPersistence(const std::filesystem::path &directory) {
+    db::UserDB database((directory / "forced-users.db").string());
+    database.saveUser("repair", "uuid-repair", "Repair Tester", 1, "os", "device", 1, "version");
+    HudTestState state;
+    std::vector<std::string> notices, applied_ranks;
+    int queued = 0, reconcile_calls = 0;
+    bool blocked = true;
+    auto synchronize = [&](bool attachment_succeeded, SyncOrigin origin, bool forced = false,
+                           bool fallback = false, bool throw_in_setter = false) {
+        const auto context = state.beginSync(hudEffectiveSyncOrigin(origin, forced));
+        if (fallback) database.assignRank("repair", "Default");
+        const auto rank = database.getUserByXuid("repair")->internal_rank;
+        if (!attachment_succeeded) return false;
+        int executed = 0;
+        const auto reconcile = [&] {
+            runHudReconciliation(context, [&] {
+                runHudStep(context, HudComponent::Preferences, true, [&] {
+                    if (throw_in_setter) throw std::runtime_error("setter failed");
+                    database.resetUnavailableSettings("repair", {{"primebds.command.socialspy", rank == "Admin"}});
+                });
+                runHudStep(context, HudComponent::WalkSpeed, true, [&] {
+                    if (throw_in_setter) throw std::runtime_error("setter failed");
+                    applied_ranks.push_back(rank);
+                });
+                ++executed;
+                ++reconcile_calls;
+            }, [] {});
+        };
+        if (fallback) reconcile();
+        if (database.pendingStateReset("repair")) {
+            reconcile();
+            database.clearPendingStateReset("repair");
+        }
+        if (forced && executed == 0) reconcile();
+        if (!forced) {
+            if (const auto notice = database.pendingRankNotice("repair")) notices.push_back(*notice);
+        }
+        database.clearPendingRankNotice("repair");
+        blocked = false;
+        if (shouldScheduleHudRepair(origin, forced, executed)) ++queued;
+        return true;
+    };
+
+    database.assignRank("repair", "DEFAULT");
+    check(synchronize(true, SyncOrigin::Join) && queued == 0 && reconcile_calls == 0 && notices.empty(),
+          "A clean same-rank join creates neither reconciliation nor a repair");
+    database.assignRank("repair", "Admin");
+    database.updateUser("repair", "enabled_ss", "1");
+    blocked = true;
+    check(!synchronize(false, SyncOrigin::Join) && queued == 0 && reconcile_calls == 0 && blocked &&
+              database.pendingStateReset("repair") && database.pendingRankNotice("repair") == "Admin",
+          "Failed initial permission synchronization queues nothing and preserves pending work and notice");
+    check(synchronize(true, SyncOrigin::Join) && queued == 1 && reconcile_calls == 1 && !blocked &&
+              !database.pendingStateReset("repair") && notices == std::vector<std::string>{"Admin"},
+          "Successful initial reconciliation consumes pending work and queues exactly one repair");
+    check(database.getUserByXuid("repair")->enabled_ss, "The initial pass keeps permitted preferences");
+    check(synchronize(true, SyncOrigin::Live, true) && queued == 1 && reconcile_calls == 2 &&
+              notices.size() == 1 && applied_ranks.back() == "Admin",
+          "Forced repair runs after acknowledgement without a recursive task or duplicate notification");
+
+    // An intervening rank update is saved before the delayed pass reads the user.
+    database.assignRank("repair", "Default");
+    blocked = true;
+    state.apply(true, {"skip"});
+    check(!synchronize(false, SyncOrigin::Live, true) && blocked && queued == 1 &&
+              database.pendingStateReset("repair") && database.pendingRankNotice("repair") == "Default",
+          "Failed forced attachment setup preserves newly pending work and its notice");
+    bool failed = false;
+    try { synchronize(true, SyncOrigin::Live, true, false, true); }
+    catch (const std::runtime_error &) { failed = true; }
+    check(failed && blocked && queued == 1 && database.pendingStateReset("repair") &&
+              database.pendingRankNotice("repair") == "Default" && notices.size() == 1,
+          "Forced setter failure cannot acknowledge the new rank or unblock the incomplete synchronization");
+    check(synchronize(true, SyncOrigin::Live, true) && !blocked && queued == 1 && reconcile_calls == 3 &&
+              applied_ranks.back() == "Default" && !database.getUserByXuid("repair")->enabled_ss &&
+              database.getUserByXuid("repair")->internal_rank == "Default" &&
+              !database.pendingStateReset("repair") && !database.pendingRankNotice("repair") && notices.size() == 1,
+          "Forced repair uses latest rank, applies all components despite skip and silently consumes new work");
+
+    // A Join-origin forced call is also full and silent; it cannot enqueue itself.
+    database.assignRank("repair", "Admin");
+    check(synchronize(true, SyncOrigin::Join, true) && queued == 1 && reconcile_calls == 4 &&
+              applied_ranks.back() == "Admin" && notices.size() == 1,
+          "The force contract applies independently of the caller's requested origin");
+    database.assignRank("repair", "Moderator");
+    check(synchronize(true, SyncOrigin::Join) && queued == 1 && reconcile_calls == 4 &&
+              notices.back() == "Moderator" && !database.pendingStateReset("repair"),
+          "Full skip consumes ordinary pending work and delivers its notice without scheduling repair");
+    database.assignRank("repair", "Admin");
+    check(synchronize(true, SyncOrigin::Live) && queued == 1 && reconcile_calls == 5 && notices.back() == "Admin",
+          "Actual online changes remain full under skip and never enqueue join repairs");
+
+    // Fallback followed by pending intentionally preserves both original passes.
+    state.apply(true, {"enable", "speeds"});
+    database.assignRank("repair", "DeletedRank");
+    check(synchronize(true, SyncOrigin::Join, false, true) && queued == 2 && reconcile_calls == 7 &&
+              notices.back() == "Default" && !database.pendingStateReset("repair"),
+          "Both successful fallback and pending sites execute but schedule only one delayed repair");
+    check(synchronize(true, SyncOrigin::Live, true) && queued == 2 && reconcile_calls == 8 &&
+              notices.back() == "Default" && applied_ranks.back() == "Default",
+          "Repair after partial fallback becomes full without inventing another rank notice");
+    database.assignRank("repair", "DeletedRank");
+    const auto notice_count = notices.size();
+    check(synchronize(true, SyncOrigin::Live, true, true) && queued == 2 && reconcile_calls == 10 &&
+              notices.size() == notice_count && !database.pendingStateReset("repair") &&
+              !database.pendingRankNotice("repair"),
+          "Forced fallback preserves two original sites without adding a third invocation or a notice");
+}
+
 int main() {
     const auto directory = std::filesystem::temp_directory_path() / ("primebds-hud-" +
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -281,8 +395,9 @@ int main() {
         checkControlsAndSnapshot();
         checkEverySelection();
         checkPersistentCompletion(directory);
+        checkForcedRepairPersistence(directory);
         std::filesystem::remove_all(directory);
-        std::cout << "HUD controls, all 512 Join/Live component selections, eligibility and persistent completion tests passed.\n";
+        std::cout << "HUD controls, all 512 Join/Live component selections, eligibility, persistent completion and silent forced repair tests passed.\n";
     } catch (const std::exception &error) {
         std::filesystem::remove_all(directory);
         std::cerr << error.what() << '\n';

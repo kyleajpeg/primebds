@@ -77,12 +77,23 @@ namespace primebds::handlers::connections {
             auto op = granted.find("primebds.minecraft.op");
             if (op == granted.end() || !op->second) player.setOp(false);
         }
-        auto uuid = player.getUniqueId();
-        plugin.getServer().getScheduler().runTask(plugin, [&plugin, uuid]() {
+        const auto uuid = player.getUniqueId();
+        const auto session = plugin.hud_timeline.session(uuid.str());
+        const auto generation = plugin.hud_timeline.generation();
+        plugin.getServer().getScheduler().runTask(plugin, [&plugin, uuid, xuid, session, generation]() {
+            // UUID alone can resolve a different login after a rapid reconnect.
+            if (plugin.hud_timeline.generation() != generation ||
+                !plugin.hud_timeline.active(uuid.str(), session)) {
+                plugin.getLogger().info("[HUDTest] session={} uuid={} event=join.next-tick-sync.cancelled reason=stale-session", session, uuid.str());
+                return;
+            }
             auto *p = plugin.getServer().getPlayer(uuid);
-            plugin.getLogger().info("{} event=join.next-tick-sync player_present={}", plugin.hudStamp(p), p != nullptr);
-            if (p)
-                plugin.reloadCustomPerms(*p, utils::SyncOrigin::Join);
+            if (!p || !p->isValid() || p->getUniqueId().str() != uuid.str() || p->getXuid() != xuid) {
+                plugin.getLogger().info("[HUDTest] session={} uuid={} event=join.next-tick-sync.cancelled reason=player-unavailable", session, uuid.str());
+                return;
+            }
+            plugin.getLogger().info("{} event=join.next-tick-sync player_present=true", plugin.hudStamp(p));
+            plugin.reloadCustomPerms(*p, utils::SyncOrigin::Join);
         });
 
         // Ban check - suppress join message if banned
