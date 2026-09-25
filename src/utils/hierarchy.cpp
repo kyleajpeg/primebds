@@ -1,4 +1,5 @@
 #include "primebds/utils/hierarchy.h"
+#include "primebds/utils/native_world_commands.h"
 #include "primebds/plugin.h"
 #include "primebds/utils/permissions/permission_manager.h"
 #include "primebds/utils/target_selector.h"
@@ -127,10 +128,22 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
         sender.sendMessage("You do not have permission to use this command");
         return false;
     }
-    // World/operational changes remain Owner-only; this policy protects direct player targeting,
-    // not terrain, PvP, plugin code or trusted console access.
-    static const std::set<std::string> owner_world = {"stop", "save", "difficulty", "gamerule", "time", "weather",
-        "toggledownfall", "daylock", "fill", "clone", "setblock", "structure", "place", "summon", "locate",
+    // Delegate only these reviewed world commands, with independent native permissions.
+    const auto world_decision = authorizeDelegatedWorldCommand(name, args,
+        [&sender](std::string_view permission) { return sender.hasPermission(std::string(permission)); });
+    if (world_decision == DelegatedWorldDecision::MissingPermission) {
+        sender.sendMessage("You do not have permission to use this command");
+        return false;
+    }
+    if (world_decision == DelegatedWorldDecision::FacingRequiresCoordinates) {
+        sender.sendMessage("Use three coordinates after summon facing; facing players or entities requires Owner/Operator or the panel.");
+        return false;
+    }
+    if (world_decision == DelegatedWorldDecision::Allowed) return true; // Keep normal native dispatch.
+    // Other world/operational changes remain restricted. Direct player protections
+    // do not isolate terrain, summoned entities, weather, PvP or trusted console access.
+    static const std::set<std::string> owner_world = {"stop", "save", "difficulty", "gamerule", "time",
+        "toggledownfall", "daylock", "fill", "clone", "setblock", "structure", "place",
         "setworldspawn", "mobevent", "tickingarea", "setmaxplayers", "scoreboard"};
     if (owner_world.contains(name)) {
         if (isAdministrator(plugin, sender) && name != "scoreboard") return true;
