@@ -8,6 +8,8 @@ adapter = source.split('static CommandRouting resolveCommandRouting(', 1)[1].spl
 assert 'getPluginCommand(commandLookupName(label))' in adapter
 assert '&owner == &plugin' in adapter and 'command->getName()' in adapter
 assert 'command->isRegistered()' in adapter and 'owner.isEnabled()' in adapter
+assert 'command->getPermissions()' in adapter and 'externalPermissionGraph().unsafe_nodes' in adapter
+assert 'unsafe.contains(hierarchy::lower(node))' in adapter
 assert 'CommandRegistry::instance().find(name)' in adapter
 assert 'canonicalName' not in adapter, 'Do not drop namespaces before actual registration lookup'
 
@@ -20,7 +22,11 @@ for handler in (player, console):
     prefix = handler.split('if (routing.route == CommandRoute::External) return;', 1)[0]
     for forbidden in ('dispatchCommand(', 'performCommand(', 'setOp(', 'event.setCommand('):
         assert forbidden not in prefix, 'External commands must retain original text and sender'
-    assert 'std::string cmd = routing.policy_name;' in handler
+    assert 'routing.policy_name.empty() ? hierarchy::canonicalName(args[0]) : routing.policy_name' in handler
+    assert 'resolveCommandRouting(plugin, commandLabel(command))' in handler
+    assert handler.index('resolveCommandRouting(') < handler.index('splitCommand(')
+assert 'if (routing.route == CommandRoute::Existing)' in player.split('args = splitCommand(', 1)[0]
+assert console.index('CommandRoute::External') < console.index('splitCommand(')
 assert player.index('CommandRoute::External') < player.index('hierarchy::authorizePluginCommand(')
 assert 'hierarchy::authorizeNativeCommand(plugin, player, cmd, arguments)' in player
 assert player.index('if (!authorized)') < player.index('canInterceptPlayerCommand(')

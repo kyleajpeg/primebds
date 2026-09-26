@@ -57,9 +57,14 @@ namespace primebds::handlers::preprocesses {
         std::optional<RegisteredPluginCommand> resolved;
         if (auto *command = plugin.getServer().getPluginCommand(commandLookupName(label))) {
             auto &owner = command->getPlugin();
+            const auto &unsafe = permissions::PermissionManager::instance().externalPermissionGraph().unsafe_nodes;
+            const auto declared = command->getPermissions();
+            const bool permissions_safe = std::none_of(declared.begin(), declared.end(), [&](const auto &node) {
+                return unsafe.contains(hierarchy::lower(node));
+            });
             resolved = RegisteredPluginCommand{
                 &owner == &plugin ? PluginCommandOwner::PrimeBDS : PluginCommandOwner::External,
-                command->getName(), command->isRegistered(), owner.isEnabled()};
+                command->getName(), command->isRegistered(), owner.isEnabled(), permissions_safe};
         }
         return classifyPluginCommand(label, resolved, [](const std::string &name) {
             return CommandRegistry::instance().find(name) != nullptr;
@@ -76,6 +81,10 @@ namespace primebds::handlers::preprocesses {
             sender.sendMessage("Command unavailable: its plugin is disabled or no longer registered.");
             return true;
         }
+        if (routing.route == CommandRoute::UnsafePermissions) {
+            sender.sendMessage("Command unavailable: its permission graph contains a cycle. Fix or remove the affected plugin and restart.");
+            return true;
+        }
         return false;
     }
 
@@ -86,8 +95,15 @@ namespace primebds::handlers::preprocesses {
 
         auto &player = event.getPlayer();
         std::string command = event.getCommand();
-        auto args = splitCommand(command);
-        if (args.empty()) { event.setCancelled(true); return; }
+
+        const auto routing = resolveCommandRouting(plugin, commandLabel(command));
+        // External message arguments may legitimately contain unmatched quotes.
+        // Leave their parsing to Endstone; preserve the existing native parser.
+        std::vector<std::string> args;
+        if (routing.route == CommandRoute::Existing) {
+            args = splitCommand(command);
+            if (args.empty()) { event.setCancelled(true); return; }
+        }
 
         auto &cfg = config::ConfigManager::instance();
         auto conf = cfg.config();
@@ -98,12 +114,11 @@ namespace primebds::handlers::preprocesses {
             utils::discordRelay("**" + player.getName() + "** ran: " + command, "cmd");
         }
 
-        const auto routing = resolveCommandRouting(plugin, args[0]);
         if (denyCommandRoute(routing, player)) { event.setCancelled(true); return; }
         // Preserve the original event and sender. Endstone checks the external
         // command's declared permissions, and its executor checks subcommands.
         if (routing.route == CommandRoute::External) return;
-        std::string cmd = routing.policy_name;
+        std::string cmd = routing.policy_name.empty() ? hierarchy::canonicalName(args[0]) : routing.policy_name;
         std::vector<std::string> arguments(args.begin() + 1, args.end());
         const auto *registered = CommandRegistry::instance().find(cmd);
         const bool authorized = registered
@@ -373,14 +388,12 @@ namespace primebds::handlers::preprocesses {
         initParseCommands();
 
         std::string command = event.getCommand();
-        auto args = splitCommand(command);
-        if (args.empty())
-            return;
-
-        const auto routing = resolveCommandRouting(plugin, args[0]);
+        const auto routing = resolveCommandRouting(plugin, commandLabel(command));
         if (denyCommandRoute(routing, event.getSender())) { event.setCancelled(true); return; }
         if (routing.route == CommandRoute::External) return;
-        std::string cmd = routing.policy_name;
+        auto args = splitCommand(command);
+        if (args.empty()) return;
+        std::string cmd = routing.policy_name.empty() ? hierarchy::canonicalName(args[0]) : routing.policy_name;
 
         if (PARSE_COMMANDS.find(cmd) == PARSE_COMMANDS.end())
             return;

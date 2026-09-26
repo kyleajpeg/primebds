@@ -33,10 +33,14 @@ int main() {
         check(route(label, std::nullopt).route == CommandRoute::Existing,
               "A label without an actual plugin registration must retain native/unknown authorization");
     }
-    check(route("/MINECRAFT:Op", std::nullopt).policy_name == "op",
-          "Existing native namespace authorization is preserved");
-    check(route("other:op", std::nullopt).policy_name == "other:op",
-          "Unknown namespace is not converted to a native command");
+    check(route("/MINECRAFT:Op", std::nullopt).policy_name.empty(),
+          "Unresolved native labels retain the legacy parsing and namespace authorization");
+    check(route("other:op", std::nullopt).policy_name.empty(),
+          "Unregistered namespace is not invented by routing");
+    const std::string free_text = "/paint a message with an unmatched \"quote";
+    check(commandLabel(free_text) == "/paint" && !primebds::hierarchy::tokenize(free_text) &&
+              route(commandLabel(free_text), external("paint")).route == CommandRoute::External,
+          "External free-form arguments never pass through the legacy quote parser");
 
     for (const auto *label : {"rankset", "rset", "/RSET", "primebds:rankset"}) {
         const auto result = route(label, RegisteredPluginCommand{PluginCommandOwner::PrimeBDS, "rankset"});
@@ -81,6 +85,10 @@ int main() {
     disabled.enabled = true;
     disabled.registered = false;
     check(route("paint", disabled).route == CommandRoute::Unavailable, "Stale registration is not dispatched");
+    auto unsafe = external("paint");
+    unsafe.permissions_safe = false;
+    check(route("paint", unsafe).route == CommandRoute::UnsafePermissions,
+          "A permission that recurses into a cycle cannot reach external dispatch");
 
     std::cout << "External command ownership, aliases, collisions and unknown-command routing passed.\n";
 }
