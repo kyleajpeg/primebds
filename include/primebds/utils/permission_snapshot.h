@@ -9,7 +9,9 @@ inline void applyPluginPermissionGroups(std::map<std::string, bool> &permissions
         // group must not acquire native OP as a side effect of normalization.
         if (node == "primebds.minecraft.op") continue;
         const auto prefix = node.substr(0, node.find('.'));
-        if (prefix == "minecraft" || prefix == "endstone") continue;
+        // Only preserve the legacy PrimeBDS shortcut. External plugins resolve
+        // their actual registered graph with explicit exceptions kept intact.
+        if (prefix != "primebds") continue;
         auto star = permissions.find(prefix + ".command");
         if (star == permissions.end()) star = permissions.find(prefix);
         if (star != permissions.end()) value = star->second;

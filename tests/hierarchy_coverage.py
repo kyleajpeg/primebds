@@ -107,12 +107,14 @@ print('Rank lookup registration, list authorization, and deferred notification w
 
 # .14: peer targeting is limited to native teleport; all permission writes use the serializer.
 hierarchy_source = (root/'src/utils/hierarchy.cpp').read_text(encoding='utf-8')
+native_policy = (root/'include/primebds/utils/native_command_policy.h').read_text(encoding='utf-8')
 teleport_branch = hierarchy_source.split('else if (name == "teleport" || name == "tp")',1)[1].split('} else if',1)[0]
 assert 'for (const auto &target : *targets)' in teleport_branch
 assert 'canTeleportTarget(actor_rank, playerRank(plugin, target))' in teleport_branch
 assert hierarchy_source.count('canTeleportTarget(')==1, 'Peer policy must not leak to other actions'
 assert 'return requireTarget(plugin, sender, target, allow_self);' in hierarchy_source
-assert '"effect"' in hierarchy_source.split('static const std::set<std::string> first_target',1)[1].split(';',1)[0]
+assert '"effect"' in native_policy.split('firstTargetNativeCommands =',1)[1].split(';',1)[0]
+assert 'firstTargetNativeCommands.contains(name)' in hierarchy_source
 assert 'bool authorizeNativeCommand(' in hierarchy_source
 assert '{"teleport", "minecraft.command.teleport"}, {"tp", "minecraft.command.teleport"}' in (root/'include/primebds/handlers/preprocesses/command_authorization.h').read_text(encoding='utf-8')
 config_source=(root/'src/utils/config/config_manager.cpp').read_text(encoding='utf-8')
@@ -123,14 +125,15 @@ print('Native-only peer teleport policy, unchanged effect authorization and cent
 
 # .16: four permission-based native world commands; unrestricted summon and no OP grants.
 native = hierarchy_source.split('bool authorizeNativeCommand(',1)[1].split('void socialSpy(',1)[0]
-owner_world = set(re.findall(r'"([^"\n]+)"', native.split('owner_world =',1)[1].split(';',1)[0]))
+owner_world = set(re.findall(r'"([^"\n]+)"', native_policy.split('ownerWorldNativeCommands =',1)[1].split(';',1)[0]))
 assert owner_world == {'stop', 'save', 'difficulty', 'gamerule', 'toggledownfall', 'daylock',
     'fill', 'clone', 'setblock', 'structure', 'place', 'setworldspawn', 'mobevent', 'tickingarea',
     'setmaxplayers', 'scoreboard'}, owner_world
-console_only = native.split('console_only =',1)[1].split(';',1)[0]
+assert 'ownerWorldNativeCommands.contains(name)' in native and 'consoleOnlyNativeCommands.contains(name)' in native
+console_only = native_policy.split('consoleOnlyNativeCommands =',1)[1].split(';',1)[0]
 assert all('"' + command + '"' in console_only for command in ('execute','function','schedule','script','scriptevent'))
 assert native.index('if (isAdministrator(plugin, sender)) return true;') < native.index('authorizeDelegatedWorldCommand(')
-world_gate = native.split('const auto world_decision =',1)[1].split('static const std::set<std::string> owner_world',1)[0]
+world_gate = native.split('const auto world_decision =',1)[1].split('if (ownerWorldNativeCommands.contains(name))',1)[0]
 assert 'sender.hasPermission(std::string(permission))' in world_gate
 missing_permission = world_gate.split('if (world_decision == DelegatedWorldDecision::MissingPermission)',1)[1].split('}',1)[0]
 assert 'return false;' in missing_permission
@@ -147,7 +150,7 @@ for command in ('summon','locate','weather','time'):
     assert command not in commands, 'Do not register a replacement native command'
 assert 'hierarchy::authorizeNativeCommand(plugin, player, cmd, arguments)' in intercept
 assert intercept.index('if (!authorized) { event.setCancelled(true); return; }') < intercept.index('if (PARSE_COMMANDS.find(cmd)')
-first_target = native.split('first_target =',1)[1].split(';',1)[0]
+first_target = native_policy.split('firstTargetNativeCommands =',1)[1].split(';',1)[0]
 assert all('"' + command + '"' in first_target for command in ('spawnpoint','kill','damage','effect'))
 assert 'name == "xp"' in native and 'return requireTarget(plugin, sender, target, allow_self);' in native
 print('Independent native world delegation, privileged bypass, retained native dispatch and existing target guards checked.')

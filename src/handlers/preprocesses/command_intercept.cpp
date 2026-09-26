@@ -5,6 +5,7 @@
 
 #include "primebds/handlers/preprocesses/command_intercept.h"
 #include "primebds/handlers/preprocesses/command_authorization.h"
+#include "primebds/handlers/preprocesses/command_routing.h"
 #include "primebds/handlers/preprocesses/crasher_patch.h"
 #include "primebds/handlers/preprocesses/whisper.h"
 #include "primebds/plugin.h"
@@ -18,6 +19,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <endstone/command/plugin_command.h>
 
 namespace primebds::handlers::preprocesses {
 
@@ -50,6 +52,33 @@ namespace primebds::handlers::preprocesses {
         return result;
     }
 
+    /// Resolve the actual registered owner before any namespace canonicalization or remap.
+    static CommandRouting resolveCommandRouting(PrimeBDS &plugin, const std::string &label) {
+        std::optional<RegisteredPluginCommand> resolved;
+        if (auto *command = plugin.getServer().getPluginCommand(commandLookupName(label))) {
+            auto &owner = command->getPlugin();
+            resolved = RegisteredPluginCommand{
+                &owner == &plugin ? PluginCommandOwner::PrimeBDS : PluginCommandOwner::External,
+                command->getName(), command->isRegistered(), owner.isEnabled()};
+        }
+        return classifyPluginCommand(label, resolved, [](const std::string &name) {
+            return CommandRegistry::instance().find(name) != nullptr;
+        });
+    }
+
+    /// An ownership collision must never execute or remap the wrong plugin's command.
+    static bool denyCommandRoute(const CommandRouting &routing, endstone::CommandSender &sender) {
+        if (routing.route == CommandRoute::Collision) {
+            sender.sendMessage("Command unavailable: its registration conflicts with a protected ChromeVale command.");
+            return true;
+        }
+        if (routing.route == CommandRoute::Unavailable) {
+            sender.sendMessage("Command unavailable: its plugin is disabled or no longer registered.");
+            return true;
+        }
+        return false;
+    }
+
     void handleCommandPreprocess(PrimeBDS &plugin, endstone::PlayerCommandEvent &event) {
         if (event.isCancelled())
             return;
@@ -69,7 +98,12 @@ namespace primebds::handlers::preprocesses {
             utils::discordRelay("**" + player.getName() + "** ran: " + command, "cmd");
         }
 
-        std::string cmd = hierarchy::canonicalName(args[0]);
+        const auto routing = resolveCommandRouting(plugin, args[0]);
+        if (denyCommandRoute(routing, player)) { event.setCancelled(true); return; }
+        // Preserve the original event and sender. Endstone checks the external
+        // command's declared permissions, and its executor checks subcommands.
+        if (routing.route == CommandRoute::External) return;
+        std::string cmd = routing.policy_name;
         std::vector<std::string> arguments(args.begin() + 1, args.end());
         const auto *registered = CommandRegistry::instance().find(cmd);
         const bool authorized = registered
@@ -343,7 +377,10 @@ namespace primebds::handlers::preprocesses {
         if (args.empty())
             return;
 
-        std::string cmd = hierarchy::canonicalName(args[0]);
+        const auto routing = resolveCommandRouting(plugin, args[0]);
+        if (denyCommandRoute(routing, event.getSender())) { event.setCancelled(true); return; }
+        if (routing.route == CommandRoute::External) return;
+        std::string cmd = routing.policy_name;
 
         if (PARSE_COMMANDS.find(cmd) == PARSE_COMMANDS.end())
             return;

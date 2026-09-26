@@ -1,5 +1,6 @@
 #include "primebds/utils/hierarchy.h"
 #include "primebds/utils/native_world_commands.h"
+#include "primebds/utils/native_command_policy.h"
 #include "primebds/plugin.h"
 #include "primebds/utils/permissions/permission_manager.h"
 #include "primebds/utils/target_selector.h"
@@ -117,14 +118,9 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
     if (isAdministrator(plugin, sender)) return true;
     const auto name = canonicalName(raw_name);
     // Communication is not an administrative action. Spy recipients have their own strict gate.
-    static const std::set<std::string> ordinary = {"help", "list", "me", "tell", "w", "whisper", "msg", "say",
-        "version", "plugins", "status", "seed", "packstack", "banlist"};
-    if (ordinary.contains(name)) return true;
+    if (ordinaryNativeCommands.contains(name)) return true;
     // Indirect execution and ambiguous/global native commands are not a delegation escape hatch.
-    static const std::set<std::string> console_only = {"execute", "function", "schedule", "script", "scriptevent",
-        "wsserver", "permission", "allowlist", "whitelist", "ban-ip", "banip", "unban-ip", "pardon-ip",
-        "reload", "reloadconfig", "reloadpacketlimitconfig", "changesetting", "gametest"};
-    if (console_only.contains(name)) {
+    if (consoleOnlyNativeCommands.contains(name)) {
         sender.sendMessage("You do not have permission to use this command");
         return false;
     }
@@ -138,19 +134,13 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
     if (world_decision == DelegatedWorldDecision::Allowed) return true; // Keep normal native dispatch.
     // Other world/operational changes remain restricted. Direct player protections
     // do not isolate terrain, summoned entities, weather, PvP or trusted console access.
-    static const std::set<std::string> owner_world = {"stop", "save", "difficulty", "gamerule",
-        "toggledownfall", "daylock", "fill", "clone", "setblock", "structure", "place",
-        "setworldspawn", "mobevent", "tickingarea", "setmaxplayers", "scoreboard"};
-    if (owner_world.contains(name)) {
+    if (ownerWorldNativeCommands.contains(name)) {
         if (isAdministrator(plugin, sender) && name != "scoreboard") return true;
         sender.sendMessage("You do not have permission to use this command");
         return false;
     }
     std::size_t index = 0;
     bool allow_self = true;
-    static const std::set<std::string> first_target = {"kick", "ban", "pardon", "unban", "op", "deop",
-        "give", "clear", "kill", "effect", "enchant", "title", "titleraw", "tellraw", "damage", "inputpermission",
-        "camera", "hud", "fog", "playanimation", "stopsound", "spawnpoint", "clearspawnpoint", "tag", "transfer"};
     if (name == "gamemode" || name == "xp" || name == "playsound") index = 1;
     else if (name == "teleport" || name == "tp") {
         const auto targets = teleportTargets(args);
@@ -163,7 +153,7 @@ bool authorizeNativeCommand(PrimeBDS &plugin, endstone::Player &sender,
             }
         }
         return true;
-    } else if (!first_target.contains(name)) {
+    } else if (!firstTargetNativeCommands.contains(name)) {
         sender.sendMessage("You do not have permission to use this command");
         return false;
     }

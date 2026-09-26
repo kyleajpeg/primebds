@@ -4,6 +4,7 @@
 #pragma once
 
 #include <endstone/endstone.hpp>
+#include "primebds/utils/external_permissions.h"
 #include <nlohmann/json.hpp>
 #include <map>
 #include <mutex>
@@ -29,6 +30,12 @@ namespace primebds::permissions {
         void clearAllPermCaches();
 
         std::map<std::string, bool> getRankPermissions(const std::string &rank);
+        /// Exact external declarations retain their provenance separately from
+        /// implicit denies and wildcard baselines. Existing core rank policy is unchanged.
+        utils::external::Layer getExternalRankLayer(const std::string &rank);
+        /// Graph snapshots are replaced only by loadPermissions on the server thread.
+        const utils::external::Analysis &externalPermissionGraph() const { return external_graph_; }
+        bool externalPermissionsManaged() const { return external_managed_; }
         bool checkPermission(endstone::Player &player, const std::string &perm,
                              const std::string &rank);
 
@@ -58,6 +65,8 @@ namespace primebds::permissions {
         std::unordered_map<std::string, std::string> prefix_cache_;
         std::unordered_map<std::string, std::string> suffix_cache_;
         std::unordered_map<std::string, std::map<std::string, bool>> perm_cache_;
+        utils::external::Analysis external_graph_;
+        bool external_managed_ = true;
     };
 
 } // namespace primebds::permissions

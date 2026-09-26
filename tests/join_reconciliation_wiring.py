@@ -71,7 +71,7 @@ assert sync.count("schedulePermissionRepair(") == 1
 assert re.search(r"if\s*\(utils::shouldSchedulePermissionRepair\(origin, force_reconcile, reconciled\)\)\s*schedulePermissionRepair\(player\);", sync)
 
 failure = sync.index("if (!attachment)")
-failure_branch = sync[failure:sync.index("for (const auto &[perm, value]")]
+failure_branch = sync[failure:sync.index("const auto key = player.getUniqueId().str()", failure)]
 assert re.search(r"return false;\s*\}?\s*$", failure_branch)
 for forbidden in ("clearPending", "reconcilePlayerState(", "permissions_pending.erase(", "schedulePermissionRepair("):
     assert forbidden not in failure_branch
@@ -144,5 +144,5 @@ for directory in ("src", "include"):
             f"Diagnostic implementation leaked into production: {path}"
 for forbidden in ("getHealth()", "getMaxHealth()", "getWalkSpeed()", "getFlySpeed()", "PacketReceiveEvent", "setPayload("):
     assert forbidden not in sync + repair + join_callback, f"Repair must not introduce snapshots/packet observation: {forbidden}"
-assert "3.4.3-chromevale.16" in plugin
+assert "3.4.3-chromevale.17" in plugin
 print("Disconnect, cancelled login, disable and replacement invalidation checked; production has no diagnostic commands, switches or logging.")

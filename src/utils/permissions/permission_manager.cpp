@@ -4,6 +4,7 @@
 
 #include "primebds/utils/permissions/permission_manager.h"
 #include "primebds/utils/config/config_manager.h"
+#include "primebds/utils/external_rank_layer.h"
 #include "primebds/plugin.h"
 
 #include <algorithm>
@@ -89,19 +90,40 @@ namespace primebds::permissions {
         bool pb_enabled = modules.value("primebds", true);
         bool es_enabled = modules.value("endstone", true);
         bool wc_enabled = modules.value("*", true);
+        external_managed_ = wc_enabled;
 
         std::set<std::string> all_perms;
+        utils::external::Graph registered_graph;
 
         // Scan server-registered permissions
         for (auto *perm : server.getPluginManager().getPermissions()) {
+            if (!perm) continue;
             auto name = toLower(perm->getName());
             auto prefix = name.substr(0, name.find('.'));
+            auto &children = registered_graph[name];
+            for (const auto &[child, value] : perm->getChildren()) children[toLower(child)] = value;
 
             if ((prefix == "minecraft" && mc_enabled) ||
                 (prefix == "primebds" && pb_enabled) ||
                 (prefix == "endstone" && es_enabled) ||
                 (prefix != "minecraft" && prefix != "primebds" && prefix != "endstone" && wc_enabled)) {
                 all_perms.insert(name);
+            }
+        }
+        external_graph_ = utils::external::analyze(registered_graph);
+        if (wc_enabled) {
+            // Registered children are valid permission names even without their
+            // own Permission object; explicit default-deny must cover them too.
+            for (const auto &[name, children] : external_graph_.graph)
+                if (utils::external::isExternal(name)) all_perms.insert(name);
+            for (const auto &[parent, child] : external_graph_.protected_edges)
+                std::cout << "[PrimeBDS] Ignoring external permission inheritance into protected authority: "
+                          << parent << " -> " << child << ". Existing native/ChromeVale policy is retained.\n";
+            if (!external_graph_.unsafe_nodes.empty()) {
+                std::cout << "[PrimeBDS] Unsafe permission graph detected. These nodes recurse into a cycle"
+                             " and cannot be attached:";
+                for (const auto &name : external_graph_.unsafe_nodes) std::cout << ' ' << name;
+                std::cout << ". Fix or remove the affected plugin and restart the server.\n";
             }
         }
 
@@ -216,6 +238,12 @@ namespace primebds::permissions {
 
         gather(base_rank);
         return result;
+    }
+
+    utils::external::Layer PermissionManager::getExternalRankLayer(const std::string &rank) {
+        std::lock_guard lock(mutex_);
+        if (PERMISSIONS.empty()) PERMISSIONS = config::ConfigManager::instance().loadPermissions();
+        return utils::external::collectRankLayer(PERMISSIONS, rank);
     }
 
     bool PermissionManager::checkPermission(endstone::Player &player, const std::string &perm,

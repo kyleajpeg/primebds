@@ -106,6 +106,7 @@ namespace primebds {
         }
         // End all active sessions
         for (auto *player : getServer().getOnlinePlayers()) {
+            clearPermissionAttachments(*player);
             sldb->endSession(player->getXuid());
             // Save logout position
             auto loc = player->getLocation();
@@ -115,6 +116,7 @@ namespace primebds {
                                   player->getDimension().getName();
             db->updateUser(player->getXuid(), "last_logout_pos", pos_str);
         }
+        permission_attachments_.forgetAll();
 
         // Save config
         config::ConfigManager::instance().save();
@@ -248,6 +250,17 @@ namespace primebds {
         }
 
         utils::applyPluginPermissionGroups(final_permissions);
+        if (pm.externalPermissionsManaged()) {
+            // The legacy flattened map loses explicit-vs-default provenance.
+            // Resolve external declarations separately; never let an implicit
+            // false root erase a true leaf (or a broad group erase an exception).
+            std::erase_if(final_permissions, [](const auto &entry) {
+                return !utils::external::isProtected(entry.first);
+            });
+            const auto external = utils::external::resolve(pm.externalPermissionGraph(),
+                pm.getExternalRankLayer(rank), utils::external::layerFromValues(user_permissions));
+            final_permissions.insert(external.begin(), external.end());
+        }
         return final_permissions;
     }
 
@@ -270,27 +283,27 @@ namespace primebds {
         std::string internal_rank = pm.checkRankExists(*this, player, user->internal_rank);
         auto final_permissions = savedPermissions(player.getXuid(), internal_rank);
 
-        {
-            std::set<endstone::PermissionAttachment *> to_remove;
-            for (auto *info : player.getEffectivePermissions()) {
-                if (!info)
-                    continue;
-                if (info->getPermission() == "primebdsoverride") {
-                    if (auto *att = info->getAttachment())
-                        to_remove.insert(att);
-                }
-            }
-            for (auto *att : to_remove)
-                att->remove();
-        }
+        // A partial refresh must not admit commands before all permission layers
+        // are synchronized. Successful completion clears this existing gate.
+        permissions_pending.insert(player.getXuid());
+        clearPermissionAttachments(player);
 
         // Create new attachment and apply all permissions
         auto *attachment = player.addAttachment(*this, "primebdsoverride", true);
         if (!attachment)
             return false;
+        const auto key = player.getUniqueId().str();
+        permission_attachments_.track(key, attachment);
 
+        utils::external::Values external_permissions;
         for (const auto &[perm, value] : final_permissions) {
+            if (pm.externalPermissionsManaged() && !utils::external::isProtected(perm)) {
+                external_permissions[perm] = value;
+                continue;
+            }
             if (perm == "minecraft" || perm == "minecraft.command" || perm == "endstone" || perm == "endstone.command") continue;
+            // Never feed a cyclic graph back into Endstone's recursive expander.
+            if (pm.externalPermissionGraph().unsafe_nodes.contains(perm)) continue;
             attachment->setPermission(perm, value);
         }
 
@@ -299,6 +312,13 @@ namespace primebds {
             bool wants_op = op_it != final_permissions.end() && op_it->second;
             if (player.isValid() && wants_op != player.isOp()) player.setOp(wants_op);
 
+        }
+
+        if (!utils::applyExternalPermissionLayers(player, *this, pm.externalPermissionGraph(),
+                external_permissions, [&](auto *layer) { permission_attachments_.track(key, layer); })) {
+            clearPermissionAttachments(player);
+            getLogger().error("External permission synchronization failed for {}; commands remain blocked.", player.getXuid());
+            return false;
         }
 
         player.updateCommands();
@@ -331,6 +351,14 @@ namespace primebds {
         if (utils::shouldSchedulePermissionRepair(origin, force_reconcile, reconciled))
             schedulePermissionRepair(player);
         return true;
+    }
+
+    void PrimeBDS::clearPermissionAttachments(endstone::Player &player) {
+        permission_attachments_.clear(player.getUniqueId().str());
+    }
+
+    void PrimeBDS::forgetPermissionAttachments(const std::string &uuid) {
+        permission_attachments_.forget(uuid);
     }
 
     void PrimeBDS::cancelPermissionRepair(const std::string &uuid) {
@@ -446,6 +474,7 @@ namespace primebds {
 
     void EventListener::onPlayerLogin(endstone::PlayerLoginEvent &event) {
         const auto uuid = event.getPlayer().getUniqueId().str();
+        plugin_.forgetPermissionAttachments(uuid);
         plugin_.cancelPermissionRepair(uuid);
         plugin_.permission_sessions.start(uuid);
         handlers::connections::handleLoginEvent(plugin_, event);
@@ -464,6 +493,7 @@ namespace primebds {
         plugin_.permission_sessions.end(uuid);
         plugin_.cancelPermissionRepair(uuid);
         handlers::connections::handleLeaveEvent(plugin_, event);
+        plugin_.clearPermissionAttachments(event.getPlayer());
     }
 
     void EventListener::onPlayerKick(endstone::PlayerKickEvent &event) {
@@ -502,7 +532,7 @@ namespace primebds {
 // Endstone plugin entry point
 // ---------------------------------------------------------------------------
 
-ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.16", primebds::PrimeBDS) {
+ENDSTONE_PLUGIN("primebds", "3.4.3-chromevale.17", primebds::PrimeBDS) {
     description = "An essentials plugin for diagnostics, stability, and quality of life on Minecraft Bedrock Edition.";
     authors = {"PrimeStrat"};
 

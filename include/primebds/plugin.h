@@ -14,6 +14,7 @@
 #include "primebds/utils/admin_commands.h"
 #include "primebds/utils/rank_tools.h"
 #include "primebds/utils/permission_sync.h"
+#include "primebds/utils/external_permission_attachments.h"
 
 // Handler includes (split organization)
 #include "primebds/handlers/actions.h"
@@ -56,6 +57,8 @@ namespace primebds {
                                bool force_reconcile = false);
         void schedulePermissionRepair(endstone::Player &player);
         void cancelPermissionRepair(const std::string &uuid);
+        void clearPermissionAttachments(endstone::Player &player);
+        void forgetPermissionAttachments(const std::string &uuid);
         utils::PermissionSyncSessions permission_sessions;
         std::map<std::string, bool> savedPermissions(const std::string &xuid, const std::string &rank);
         void reconcilePlayerState(endstone::Player &player);
@@ -107,6 +110,7 @@ namespace primebds {
         utils::IntervalManager afk_interval;
 
     private:
+        utils::OwnedPermissionAttachments permission_attachments_;
         utils::PermissionRepairTasks permission_repairs_;
         int god_maintenance_task_ = -1;
         std::set<std::string> god_feed_failures_;
